@@ -5,12 +5,12 @@ Dois testes, os dois **sem gravar nada no banco** e **só com XML inventado** (n
 ## 1. As regras puras (sem navegador, sem banco)
 
 ```powershell
-node ferramentas/teste_fiscal/teste_fiscal.mjs     # 116 conferências em 27/11/2026
+node ferramentas/teste_fiscal/teste_fiscal.mjs     # 133 conferências em 27/11/2026
 ```
 
 Prova `src/FiscalArquivo.ts` (numeração, situação, ligação nota ↔ OP nos dois sentidos, o que vai ao banco), `src/FiscalProntidao.ts` a ligação da OP ao cliente (`src/FiscalLigacaoDaOp.ts`: agrupar por nome, sugestão, quem entra na lista) o mapa de tipos de nota (`src/FiscalTiposDeNota.ts`: o que a OP pede e a conferência com a nota informada) e o motor das regras fiscais versionadas (`src/FiscalMotor.ts`: escolher a regra sem chutar, conflitos, o que falta para aprovar, formulário, o que mudou entre versões; só regras inventadas) (a OP está pronta para virar nota? cliente, itens e empresa, cada um estragado de um jeito; a ligação do cliente (o id gravado na OP manda, depois o CPF/CNPJ e o nome) e a do item, quando não se acham ou se acham em dois),  `src/FiscalRegras.ts` (cadastros: CNPJ/CPF, indicador da inscrição, CEST, origem, série nova ≠ série atual…) e `src/FiscalXml.ts` (o leitor de XML e as travas da especificação do Fiscal, cada uma nos dois sentidos: a nota certa passa limpa e a nota com o defeito plantado é pega). Roda direto no Node 24 (`FiscalProntidao.ts` importa só `FiscalRegras.ts`, com a extensão `.ts`; os demais não importam nada do projeto).
 
-`node ferramentas/teste_fiscal/plantar_defeitos_prontidao.cjs` (rodar da raiz do projeto) estraga, um de cada vez, a regra da prontidão (`src/FiscalProntidao.ts`) e a da ligação OP ↔ cliente (`src/FiscalLigacaoDaOp.ts`) e confere que o teste acima pega cada defeito (38 de 38 em 27/11/2026); devolve os arquivos ao que eram no fim.
+`node ferramentas/teste_fiscal/plantar_defeitos_prontidao.cjs` (rodar da raiz do projeto) estraga, um de cada vez, a regra da prontidão (`src/FiscalProntidao.ts`) e a da ligação OP ↔ cliente (`src/FiscalLigacaoDaOp.ts`), o mapa de tipos de nota, o motor das regras e o levantamento do histórico (`src/FiscalLevantamento.ts`) e confere que o teste acima pega cada defeito (56 de 56 em 27/11/2026); devolve os arquivos ao que eram no fim.
 
 ## 2. As telas no navegador (gravações bloqueadas)
 
@@ -20,7 +20,7 @@ Prova `src/FiscalArquivo.ts` (numeração, situação, ligação nota ↔ OP nos
 ```powershell
 $env:NODE_PATH = "<pasta>\node_modules"
 $env:BASE = "http://localhost:<porta>/ACN/"
-node ferramentas/teste_fiscal/teste_fiscal_tela.cjs     # 136 conferências em 27/11/2026 (inclui as visões Cadastros fiscais › OPs sem cliente, › Tipos de nota e › Regras, com OPs, clientes, itens, versões e regras simulados)
+node ferramentas/teste_fiscal/teste_fiscal_tela.cjs     # 151 conferências em 27/11/2026 (inclui as visões Cadastros fiscais › OPs sem cliente, › Tipos de nota e › Regras, com OPs, clientes, itens, versões e regras simulados, e o Levantamento do histórico dentro do Conferidor)
 ```
 
 Cobre: o arquivo de notas emitidas (dados SIMULADOS: lista, filtros, situação, ligação com a OP, janela da nota com o XML, numeração com buraco e inutilização, OPs sem XML), o botão "Guardar no arquivo" (o que SERIA enviado, sucesso e falha), as empresas emitentes (ACN e DETECH, o aviso do certificado digital, gravação que falha não vira "salvo"), as transportadoras (cadastro, nome obrigatório, CNPJ), o relatório de clientes e de itens que faltam (totais, limite de 200 linhas na tela, "Preencher", ação em lote que grava **só a coluna escolhida**), a seção fiscal dentro do cliente, o Conferidor de XML (3 arquivos, filtro, busca, limpar, nada gravado), **a prontidão da OP no Faturamento (selo, cartão do alto, resumo do lote, janela do detalhe, leitura recusada sem selo) e o quadro "Nota fiscal" do Dossiê da OP (prontidão, nota guardada e "Sem XML guardado"), com OPs e cadastros SIMULADOS** e a largura em celular de 390 px. As abas e os endereços (`#/fiscal`, `#/fiscal/cadastros`, `#/fiscal/conferidor`) são do cenário C46 do `../teste_enderecos` (`node teste_enderecos.cjs "^C46 fiscal"`).

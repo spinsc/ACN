@@ -655,4 +655,100 @@ t('resumoDasCondicoes: diz só o que a regra restringe', () => {
   assert.ok(r.includes('Empresa ACN') && r.includes('NCM 8512…') && r.includes('Origem 0') && r.includes('Não monofásico') && r.some(x => /interestadual/.test(x)), r.join('|'));
 });
 
+// ── Levantamento do histórico das notas (27/11/2026): FiscalLevantamento.ts, só com notas inventadas ──
+const LV = await import(pathToFileURL(RAIZ + '/FiscalLevantamento.ts').href);
+const nt = (o = {}) => le(nota(o), 'n' + (o.numero || 100) + '.xml');
+const EM = EMIT.map(e => ({ cnpj: e.cnpj, codigo: e.codigo }));
+const lev = (notas, extra = {}) => LV.levantar(notas, { emitentes: EM, ...extra });
+
+t('levantar: notas iguais viram UM caso, com itens, notas e exemplos', () => {
+  const l = lev([nt({ numero: 1 }), nt({ numero: 2 }), nt({ numero: 3 })]);
+  assert.equal(l.grupos.length, 1); const g = l.grupos[0];
+  assert.equal(g.itens, 6); assert.equal(g.notas, 3); assert.deepEqual(g.exemplos, ['1', '2', '3']); assert.equal(g.emitente, 'ACN'); assert.equal(g.emitenteCadastrado, true);
+  assert.equal(g.destino, 'dentro_uf'); assert.equal(g.indicador_ie, 'contribuinte'); assert.equal(g.tratamento.cfop, '5102'); assert.equal(g.tratamento.cst, '00'); assert.equal(g.tratamento.pICMS, 17);
+  assert.equal(g.variacao, false); assert.equal(l.variacoes.length, 0); assert.equal(l.consideradas, 3); assert.equal(l.itens, 6);
+});
+t('levantar: as grafias da mesma natureza se juntam (sem acento, maiúscula e pontuação)', () => {
+  const l = lev([nt({ numero: 1, natOp: 'VENDA DE MERCADORIA' }), nt({ numero: 2, natOp: 'Venda de mercadoria.' }), nt({ numero: 3, natOp: 'VENDA  DE  MERCADORIA ADQUIRIDA' })]);
+  assert.equal(l.naturezas.length, 2); assert.equal(l.naturezas[0].notas, 2); assert.equal(l.naturezas[0].grafias.length, 2);
+  assert.equal(LV.chaveDaNatureza('Venda de Mercadoria.'), LV.chaveDaNatureza('VENDA  DE MERCADORIA')); assert.equal(LV.chaveDaNatureza('Devolução'), 'DEVOLUCAO'); assert.equal(LV.chaveDaNatureza(null), '');
+});
+t('levantar: destino e inscrição do cliente separam os casos', () => {
+  const l = lev([nt({ numero: 1 }), nt({ numero: 2, idDest: '2', cfop: '6102' }), nt({ numero: 3, indIE: '9', destIe: '' }), nt({ numero: 4, idDest: '3', cfop: '7102' })]);
+  assert.equal(l.grupos.length, 4);
+  assert.ok(l.grupos.some(g => g.destino === 'fora_uf' && g.tratamento.cfop === '6102')); assert.ok(l.grupos.some(g => g.indicador_ie === 'nao_contribuinte')); assert.ok(l.grupos.some(g => g.destino === 'exterior'));
+  assert.equal(l.variacoes.length, 0, 'casos diferentes não são variação');
+});
+t('levantar: o mesmo caso com tratamento diferente é variação, com o maior primeiro', () => {
+  const l = lev([nt({ numero: 1 }), nt({ numero: 2 }), nt({ numero: 3, cfop: '5101' })]);
+  assert.equal(l.grupos.length, 2); assert.ok(l.grupos.every(g => g.variacao)); assert.equal(l.variacoes.length, 1);
+  const v = l.variacoes[0]; assert.equal(v.tratamentos.length, 2); assert.equal(v.tratamentos[0].cfop, '5102'); assert.equal(v.tratamentos[0].itens, 4); assert.equal(v.tratamentos[1].cfop, '5101');
+});
+t('levantar: alíquota ou benefício diferentes também são variação', () => {
+  assert.equal(lev([nt({ numero: 1 }), nt({ numero: 2, pICMS: '12' })]).variacoes.length, 1);
+  assert.equal(lev([nt({ numero: 1 }), nt({ numero: 2, cBenef: 'SC850001' })]).variacoes.length, 1);
+});
+t('levantar: cancelada e não autorizada ficam de fora e são contadas', () => {
+  const a = nt({ numero: 1 }), b = nt({ numero: 2 }), c = nt({ numero: 3, prot: '302' });
+  const l = lev([a, b, c], { canceladas: new Set([b.chave]) });
+  assert.equal(l.consideradas, 1); assert.equal(l.canceladas, 1); assert.equal(l.naoAutorizadas, 1); assert.equal(l.notasLidas, 3); assert.equal(l.grupos[0].notas, 1);
+});
+t('levantar: nota de empresa fora do cadastro entra, mas marcada', () => {
+  const l = lev([nt({ numero: 1 }), nt({ numero: 2, cnpj: '11222333000181' })]);
+  assert.equal(l.semEmitenteCadastrado, 1); assert.equal(l.grupos.length, 2);
+  const fora = l.grupos.find(g => !g.emitenteCadastrado); assert.equal(fora.emitente, '11222333000181');
+});
+t('levantar: o Simples usa o CSOSN; as duas empresas são casos separados', () => {
+  const l = lev([nt({ numero: 1, cnpj: DETECH, crt: '1', cst: '', csosn: '102', pICMS: '' }), nt({ numero: 2 })]);
+  assert.equal(l.grupos.length, 2); const d = l.grupos.find(g => g.emitente === 'DETECH'); assert.equal(d.tratamento.cst, '102'); assert.equal(d.tratamento.pICMS, null);
+});
+t('levantar: NCM mais comuns do caso e peso acumulado das naturezas', () => {
+  const l = lev([nt({ numero: 1, ncm: '85258929' }), nt({ numero: 2, ncm: '85258929' }), nt({ numero: 3, ncm: '85176255' }), nt({ numero: 4, natOp: 'SERVICO' })]);
+  const g = l.grupos.find(x => x.naturezaChave === 'VENDA DE MERCADORIA'); assert.equal(g.ncms[0].ncm, '85258929'); assert.equal(g.ncms[0].itens, 4);
+  assert.ok(Math.abs(l.naturezas[l.naturezas.length - 1].acumulado - 1) < 1e-9); assert.ok(l.naturezas[0].acumulado < 1 && l.naturezas[0].acumulado > 0);
+  assert.equal(LV.coberturaDosMaiores(l, 1) > 0.5, true); assert.equal(LV.coberturaDosMaiores(l, 99), 1); assert.equal(LV.coberturaDosMaiores(lev([]), 3), 0);
+});
+t('levantar: sem notas não quebra', () => { const l = lev([]); assert.equal(l.consideradas, 0); assert.deepEqual(l.grupos, []); assert.deepEqual(l.variacoes, []); });
+
+const VENDA = LV.chaveDaNatureza('VENDA DE MERCADORIA');
+t('propostas: sem a operação escolhida nada vira proposta (e o motivo é dito)', () => {
+  const p = LV.propostasDoHistorico(lev([nt({ numero: 1 })]), {});
+  assert.equal(p.propostas.length, 0); assert.equal(p.ignoradas[0].itens, 2); assert.match(p.ignoradas[0].motivo, /sem operação/);
+});
+t('propostas: caso sempre igual vira proposta "a confirmar", sem fonte e que a regra aceitaria gravar', () => {
+  const p = LV.propostasDoHistorico(lev([nt({ numero: 1 }), nt({ numero: 2 })]), { [VENDA]: 'venda_material' });
+  assert.equal(p.propostas.length, 1); const x = p.propostas[0];
+  assert.deepEqual(x.condicoes, { emitente: 'ACN', tipo_operacao: 'venda_material', destino: 'dentro_uf', indicador_ie: 'contribuinte' });
+  assert.equal(x.form.cfop, '5102'); assert.equal(x.form.cst_csosn, '00'); assert.equal(x.form.aliquota_icms_pct, '17'); assert.equal(x.form.confirmada, false); assert.equal(x.form.fonte, '');
+  assert.match(x.form.rotulo, /^Histórico: /); assert.equal(M.erroDaRegra(x.form), null); assert.equal(x.itens, 4); assert.equal(x.notas, 2);
+  assert.equal(M.chaveDasCondicoes(x.form), x.chave, 'a chave da proposta é a das condições da regra (é por ela que o rascunho evita repetir)');
+});
+t('propostas: caso que variou NÃO vira proposta: é ambíguo', () => {
+  const p = LV.propostasDoHistorico(lev([nt({ numero: 1 }), nt({ numero: 2, cfop: '5101' })]), { [VENDA]: 'venda_material' });
+  assert.equal(p.propostas.length, 0); assert.equal(p.ambiguas.length, 1); assert.equal(p.ambiguas[0].tratamentos, 2); assert.match(p.ambiguas[0].condicoes, /ACN/);
+});
+t('propostas: duas naturezas escolhidas como a MESMA operação com tratamentos diferentes também são ambíguas', () => {
+  const l = lev([nt({ numero: 1, natOp: 'VENDA A' }), nt({ numero: 2, natOp: 'VENDA B', cfop: '5101' })]);
+  const p = LV.propostasDoHistorico(l, { [LV.chaveDaNatureza('VENDA A')]: 'venda_material', [LV.chaveDaNatureza('VENDA B')]: 'venda_material' });
+  assert.equal(p.propostas.length, 0); assert.equal(p.ambiguas.length, 1);
+  const q = LV.propostasDoHistorico(l, { [LV.chaveDaNatureza('VENDA A')]: 'venda_material', [LV.chaveDaNatureza('VENDA B')]: 'servico_na_op' });
+  assert.equal(q.propostas.length, 2, 'operações diferentes não se misturam');
+});
+t('propostas: empresa fora do cadastro, destino em branco e dado incompleto ficam de fora, cada um com o seu motivo', () => {
+  const l = lev([nt({ numero: 1, cnpj: '11222333000181' }), nt({ numero: 2, idDest: '' }), nt({ numero: 3, cfop: '' })]);
+  const p = LV.propostasDoHistorico(l, { [VENDA]: 'venda_material' });
+  assert.equal(p.propostas.length, 0); const m = p.ignoradas.map(i => i.motivo).join('|');
+  assert.match(m, /não está no cadastro/); assert.match(m, /sem destino/); assert.match(m, /incompleto/);
+  assert.equal(p.ignoradas.reduce((s, i) => s + i.itens, 0), 6);
+});
+t('propostas: o benefício fiscal e a alíquota com vírgula passam para o formulário', () => {
+  const p = LV.propostasDoHistorico(lev([nt({ numero: 1, cBenef: 'SC850001', pICMS: '12.5' })]), { [VENDA]: 'venda_material' });
+  assert.equal(p.propostas[0].form.cbenef, 'SC850001'); assert.equal(p.propostas[0].form.aliquota_icms_pct, '12,5');
+});
+t('propostas: cada situação (empresa, destino, IE) é uma proposta, em ordem de peso', () => {
+  const l = lev([nt({ numero: 1 }), nt({ numero: 2 }), nt({ numero: 3, idDest: '2', cfop: '6102' })]);
+  const p = LV.propostasDoHistorico(l, { [VENDA]: 'venda_material' });
+  assert.equal(p.propostas.length, 2); assert.equal(p.propostas[0].condicoes.destino, 'dentro_uf'); assert.equal(p.propostas[1].condicoes.destino, 'fora_uf');
+});
+
 console.log(`${ok} conferências passaram${process.exitCode ? ', COM FALHAS (veja acima)' : ''}.`);

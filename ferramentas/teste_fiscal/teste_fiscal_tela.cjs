@@ -104,6 +104,7 @@ const simularTipos = (url) => {
 
 // ── regras fiscais versionadas (27/11/2026): versões e regras SIMULADAS; só vale com `modoRegras` ligado ──
 let modoRegras = false;
+let antesL2 = 0;
 let modoLeituraDasRegras = 'ok';   // 'ok' | 'erro'
 let modoAprovarRegras = 'ok';      // 'ok' | 'recusa'
 let bdRegras = { versoes: [], regras: [] };
@@ -119,7 +120,7 @@ const simularRegras = (url) => {
   if (/\/rest\/v1\/fiscal_regras_versoes\?/.test(url)) return modoLeituraDasRegras === 'erro' ? erro : { status: 200, body: bdRegras.versoes };
   if (/\/rest\/v1\/fiscal_regras\?/.test(url)) { const m = decodeURIComponent(url).match(/versao_id=eq\.([^&]+)/); return modoLeituraDasRegras === 'erro' ? erro : { status: 200, body: bdRegras.regras.filter(r => r.versao_id === (m && m[1])) }; }
   if (/\/rest\/v1\/auth_usuarios\?/.test(url)) return { status: 200, body: [{ id: 'u-outro', nome: 'Outra Pessoa' }] };
-  if (/\/rest\/v1\/fiscal_emitentes\?/.test(url)) return { status: 200, body: [{ id: 'e1', codigo: 'ACN', razao_social: 'ACN SINAL VERDE LTDA' }, { id: 'e2', codigo: 'DETECH', razao_social: 'DETECH' }] };
+  if (/\/rest\/v1\/fiscal_emitentes\?/.test(url)) return { status: 200, body: [{ id: 'e1', codigo: 'ACN', razao_social: 'ACN SINAL VERDE LTDA', cnpj: ACN, crt: 3 }, { id: 'e2', codigo: 'DETECH', razao_social: 'DETECH', cnpj: DETECH, crt: 1 }] };
   return null;
 };
 const escritaDasRegras = (url, metodo, corpo) => {
@@ -165,6 +166,8 @@ const confirmaDialogo = async (page) => { await page.waitForSelector('.acn-dialo
   fs.writeFileSync(arqs.certa, nota({ numero: 100 }));
   fs.writeFileSync(arqs.errada, nota({ numero: 102, idDest: '2', cfop: '5102' }));   // interestadual (idDest 2) com CFOP de dentro do estado
   fs.writeFileSync(arqs.lixo, '<isto nao e uma nota>');
+  arqs.variacao = path.join(pasta, 'variacao.xml');
+  fs.writeFileSync(arqs.variacao, nota({ numero: 110, cfop: '5101' }));   // o mesmo caso da nota certa com outro CFOP: é a variação do Levantamento
 
   const ctx = await abrir({ simular: (url) => (modoRegras ? simularRegras(url) : null) || (modoTipos ? simularTipos(url) : null) || (modoLigacao ? simularLigacao(url) : null) || (modoProntidao ? simularProntidao(url) : null) || simularArquivo(url), escritaSimulada: (url, metodo, corpo) => respostaDaGravacao(url, metodo, corpo) });
   const { page, gravacoes, consoleErros, falhasDePagina } = ctx;
@@ -688,6 +691,70 @@ const confirmaDialogo = async (page) => { await page.waitForSelector('.acn-dialo
     await clicarTexto(page, '.acn-main button', 'Nova regra');
     await page.waitForSelector('#rg-rotulo', { timeout: 5000 });
     confere('celular 390: a janela da regra não estoura a largura da página', await semRolagemLateral(page));
+    await page.setViewport({ width: 1500, height: 900 });
+    // ═══ Levantamento do histórico dos XMLs (27/11/2026): dentro do Conferidor, só lê; o rascunho de regras entra "a confirmar" — dados SIMULADOS ═══
+    bdRegras = { versoes: [], regras: [] };
+    await page.goto(BASE + '#/fiscal/conferidor', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page);
+    await page.waitForSelector('input[type="file"][aria-label="Escolher arquivos XML"]', { timeout: 20000 });
+    await (await page.$('input[type="file"][aria-label="Escolher arquivos XML"]')).uploadFile(arqs.certa, arqs.errada, arqs.variacao);
+    await page.waitForFunction(() => /Arquivos lidos\s*3/.test(document.body.innerText), { timeout: 15000 });
+    const antesLev = gravacoes.length;
+    const clicarChip = (rotulo) => page.evaluate((r) => [...document.querySelectorAll('.acn-chips button')].find(x => x.innerText.trim().startsWith(r))?.click(), rotulo);
+    await clicarChip('Levantamento do histórico');
+    await page.waitForFunction(() => /Naturezas de operação encontradas/.test(document.body.innerText), { timeout: 10000 });
+    t = await textoDaTela(page);
+    confere('levantamento: diz que é o histórico e não a regra, e que nada é gravado sem pedir', /É o histórico, não a regra/.test(t) && /Nada é gravado enquanto você não pedir/.test(t), t.slice(0, 300));
+    confere('levantamento: 3 notas, 6 itens, 3 operações distintas e 1 caso que variou', /Notas levantadas 3 /.test(t) && /Itens 6 /.test(t) && /Operações distintas 3 /.test(t) && /Casos que variaram 1 /.test(t), t.slice(t.indexOf('Notas levantadas'), t.indexOf('Notas levantadas') + 300));
+    confere('levantamento: o caso que variou mostra os dois jeitos (CFOP 5102 e 5101)', /2 jeitos/.test(t) && /CFOP 5102/.test(t) && /CFOP 5101/.test(t), t.slice(t.indexOf('3. Mesmo caso'), t.indexOf('3. Mesmo caso') + 400));
+    confere('levantamento: sem escolher a operação, não propõe nada e explica o que fazer', /Escolha, na tabela 1/.test(t) && !/Criar rascunho com/.test(t));
+    confere('levantamento: tem o botão da planilha para a contabilidade', /Baixar planilha para a contabilidade/.test(t));
+    confere('levantamento: ver não grava nada', gravacoes.slice(antesLev).filter(x => !/ver_como_encerrar/.test(x.url)).length === 0, JSON.stringify(gravacoes.slice(antesLev).map(x => x.url)));
+    await page.select('select.acn-flev-sel', 'venda_material');
+    await page.waitForFunction(() => /Criar rascunho com 1 regra/.test(document.body.innerText), { timeout: 8000 });
+    t = await textoDaTela(page);
+    confere('levantamento: escolhida a operação, 1 proposta (o caso estável) e 1 ambíguo (o que variou)', /Propostas 1 /.test(t) && /Casos ambíguos 1 /.test(t) && /Outro estado/.test(t) && /ACN · .*Dentro do estado/.test(t), t.slice(t.indexOf('4. Propostas'), t.indexOf('4. Propostas') + 500));
+    antesL2 = gravacoes.length;
+    await clicarTexto(page, '.acn-fcad-guardar button', 'Criar rascunho com 1 regra(s)');
+    const dlgL = await confirmaDialogo(page);
+    await page.waitForFunction(() => /Rascunho aberto: 1 proposta/.test(document.body.innerText), { timeout: 10000 });
+    confere('levantamento: pergunta antes e avisa que entra "a confirmar" e que é o que FOI feito', /Colocar 1 proposta/.test(dlgL) && /a confirmar/.test(dlgL) && /não necessariamente o que está certo/.test(dlgL), dlgL);
+    const gL = gravacoes.slice(antesL2).filter(x => !/ver_como_encerrar/.test(x.url));
+    const postL = gL.filter(x => x.metodo === 'POST' && /\/rest\/v1\/fiscal_regras(\?|$)/.test(x.url));
+    confere('levantamento: abriu UM rascunho e gravou UMA regra', gL.filter(x => /rpc\/fiscal_regras_nova_versao/.test(x.url)).length === 1 && postL.length === 1, JSON.stringify(gL.map(x => x.url)));
+    const regraL = JSON.parse((postL[0] && postL[0].corpo) || '{}');
+    confere('levantamento: a regra vai sem confirmação e sem fonte, com as condições do caso', regraL.confirmada === false && !regraL.fonte && regraL.emitente === 'ACN' && regraL.tipo_operacao === 'venda_material' && regraL.destino === 'fora_uf' && regraL.indicador_ie === 'contribuinte' && regraL.versao_id === 'v1', JSON.stringify(regraL));
+    confere('levantamento: o que a nota fez (5102) vai como está, e a observação diz que é proposta', regraL.cfop === '5102' && regraL.cst_csosn === '00' && /confirmar com a contabilidade/.test(regraL.observacao || ''), JSON.stringify([regraL.cfop, regraL.observacao]));
+    // de novo: o que já está no rascunho não é regravado
+    antesL2 = gravacoes.length;
+    await clicarTexto(page, '.acn-fcad-guardar button', 'Criar rascunho com 1 regra(s)');
+    await confirmaDialogo(page);
+    await page.waitForFunction(() => /Rascunho atualizado: 0 proposta\(s\) entraram, 1 já estava/.test(document.body.innerText), { timeout: 10000 });
+    confere('levantamento: repetir não regrava a regra que já está no rascunho', gravacoes.slice(antesL2).filter(x => x.metodo === 'POST' && /fiscal_regras(\?|$)/.test(x.url)).length === 0, JSON.stringify(gravacoes.slice(antesL2).map(x => x.url)));
+    // leitura recusada: nunca vira "rascunho feito"
+    modoLeituraDasRegras = 'erro';
+    await clicarTexto(page, '.acn-fcad-guardar button', 'Criar rascunho com 1 regra(s)');
+    await confirmaDialogo(page);
+    await page.waitForFunction(() => /Falha ao montar o rascunho/.test(document.body.innerText), { timeout: 10000 });
+    confere('levantamento: leitura recusada → faixa vermelha em português, sem dizer que o rascunho foi feito', await page.evaluate(() => !!document.querySelector('.acn-faixa.tom-erro')) && !/Rascunho (aberto|atualizado)/.test(await textoDaTela(page)), 'a faixa de falha não pode conviver com a de sucesso');
+    modoLeituraDasRegras = 'ok';
+    // volta para a conferência: o mesmo lote, sem reler (o setViewport com toque recarrega a página, então o celular vem depois)
+    await clicarChip('Conferência das notas');
+    await espera(800);
+    t = await textoDaTela(page);
+    confere('levantamento: o chip Conferência das notas volta à conferência (KPIs de bloqueio e alerta e o Guardar no arquivo)', /Com bloqueio/.test(t) && /Só alerta/.test(t) && /Guardar no arquivo da empresa/.test(t), t.slice(0, 300));
+    // celular: a página recarrega ao ligar o toque, então os arquivos sobem de novo
+    await page.setViewport({ width: 390, height: 800, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+    await page.goto(BASE + '#/fiscal/conferidor', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page);
+    await page.waitForSelector('input[type="file"][aria-label="Escolher arquivos XML"]', { timeout: 20000 });
+    await (await page.$('input[type="file"][aria-label="Escolher arquivos XML"]')).uploadFile(arqs.certa, arqs.errada, arqs.variacao);
+    await page.waitForFunction(() => /Arquivos lidos\s*3/.test(document.body.innerText), { timeout: 15000 });
+    await clicarChip('Levantamento do histórico');
+    await page.waitForFunction(() => /Naturezas de operação encontradas/.test(document.body.innerText), { timeout: 10000 });
+    await page.select('select.acn-flev-sel', 'venda_material');
+    await page.waitForFunction(() => /Criar rascunho com 1 regra/.test(document.body.innerText), { timeout: 8000 });
+    confere('celular 390: o Levantamento (tabelas, variações e propostas) não estoura a largura da página', await semRolagemLateral(page), String(await page.evaluate(() => document.documentElement.scrollWidth)));
     await page.setViewport({ width: 1500, height: 900 });
     modoRegras = false;
 
