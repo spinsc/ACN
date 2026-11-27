@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // ATENDIMENTO EM GARANTIA — o relatório semanal (G6 do PLANO_GARANTIA.md, 20/10/2026)
 //

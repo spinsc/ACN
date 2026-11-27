@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // PINTURA DA SERRALHERIA — do pedido da peça até o serviço de terceiro
 //

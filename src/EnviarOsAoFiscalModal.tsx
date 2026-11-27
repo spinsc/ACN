@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // EnviarOsAoFiscalModal — "Enviar ao Fiscal" da OS cobrada concluída do Laboratório (S2 do PLANO_SAC_FLUXO.md, decisão do usuário em 27/10/2026)
 //

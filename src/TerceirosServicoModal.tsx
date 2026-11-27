@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Serviços de terceiros: as duas janelas de olhar e mexer no que já foi pedido (fatia T2 do PLANO_SERVICOS_TERCEIROS.md, 22/11/2026):
 //  • `ModalDoServico`: um serviço por inteiro (situação, prestador, dia, valores, ligação, peças, anexos, histórico), com os passos que a pessoa pode dar e a edição dos dados;
 //  • `ModalDoGrupo`: os carros de uma mesma venda que o quadro junta num cartão só, com marcar quais, passar os marcados de coluna e ajustar o mesmo dado em todos de uma vez.

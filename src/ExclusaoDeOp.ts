@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Excluir uma OP — quem pode, o que impede, o que é desligado e a gravação (pedido do usuário em 11/11/2026).
 // Decidido com o usuário: só Admin e gerentes, sempre com motivo; a OP NÃO é apagada: fica marcada como excluída (quem, quando, motivo, etapa em que estava
 // e o que foi desligado), some de todas as telas e só aparece, para leitura, na aba "OPs em aberto" do CRM/Comercial. O número da OP excluída fica reservado.

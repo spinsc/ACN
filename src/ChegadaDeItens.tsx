@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // ChegadaDeItens — "Chegada de itens" da OC na Logística (pedido do usuário em 28/10/2026)
 //

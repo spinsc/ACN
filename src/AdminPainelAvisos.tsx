@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // Painel "Avisos" do Admin — os avisos do sistema que aparecem no 📌 de todo mundo (12e92, 27/11/2026). Saiu do AdminTab.tsx já no padrão do design system
 // (`Botao`, `Faixa`, `Selo`, `Chips`, `confirmar`, `mostrarAviso`, classes `acn-avsa-*` do design.css, sem `style` solto) e reaproveita os cartões `acn-avs-*`
@@ -28,7 +27,7 @@ import { confirmar } from './Feedback';
 import { Botao, Chips, Faixa, Selo } from './Interface';
 import Linkify from './Linkify';
 import { podeMexerNoAviso, podePublicarAviso } from './utils/permissoes';
-// 12e93 (27/11/2026): as regras e a gravação saíram daqui para os módulos que o quadro flutuante 📌 também usa (o formulário, a validade, as perguntas, as frases, a trava
+// 12e92b (27/11/2026): as regras e a gravação saíram daqui para os módulos que o quadro flutuante 📌 também usa (o formulário, a validade, as perguntas, as frases, a trava
 // do clique duplo e a conferência da linha devolvida), para as duas telas não divergirem de novo.
 import {
   CRITICIDADES, FORM_AVISO_VAZIO as VAZIO, PERGUNTA_DESCARTAR_ALTERACAO, criadoEmLabel, faltaTextoNoAviso, formDoAviso, mesmoFormAviso, perguntaDescartarAoAbrir,

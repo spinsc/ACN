@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ============================================
 // ARQUIVO: src/PausaWidget.tsx
 // Pausa manual + horário comercial pras etapas com "Iniciar"/"Concluir"

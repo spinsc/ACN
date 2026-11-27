@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // CHEGADA DO VEÍCULO À MATRIZ E PRAZO EM DIAS (pedido do usuário em 24/11/2026)
 //

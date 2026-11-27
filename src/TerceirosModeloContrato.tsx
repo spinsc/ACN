@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Serviços de terceiros: a aba "Modelo do contrato" (fatia T4 do PLANO_SERVICOS_TERCEIROS.md, 23/11/2026): as empresas que contratam (ACN e DETECH) e o texto das cláusulas que sai impresso
 // no contrato e na ordem de serviço. O texto que veio com o sistema é uma MINUTA minha (não sou advogado): enquanto o Admin não aprovar, toda folha impressa leva a faixa vermelha "MINUTA".
 // Só o Admin edita e aprova (o banco recusa os outros: `terceiros_config_salvar`); todos leem. Mudou o texto ou os dados de uma empresa, a aprovação cai e precisa ser dada de novo.

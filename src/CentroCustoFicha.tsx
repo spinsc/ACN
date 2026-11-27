@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // CENTROS DE CUSTO — cadastro com a FICHA COMPLETA (Etapa 15a do ux-fluxo, 05/10/2026)
 //

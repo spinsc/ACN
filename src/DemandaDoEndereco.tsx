@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // DEMANDAS GERAIS — o hospedeiro da janela da demanda aberta PELO ENDEREÇO (plano PLANOS CONCLUIDOS/PLANO_ENDERECOS_E_ROTAS.md, Fase 5, 26/11/2026).
 //

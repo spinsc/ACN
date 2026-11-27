@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React from 'react';
 import { hojeISO } from './Interface';
 import { resolverDataDaNota } from './DataDaNota';

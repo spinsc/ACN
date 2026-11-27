@@ -8,6 +8,7 @@
     "build": "vite build",
     "icones": "node scripts/icones/extrair.mjs && python scripts/icones/gerar-fonte.py",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "conferir": "npm run typecheck && node ferramentas/tipagem/conferir_nocheck.cjs",
     "lint": "oxlint",
     "preview": "vite preview"
   },

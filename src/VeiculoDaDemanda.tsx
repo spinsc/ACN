@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // DEMANDAS GERAIS — o quadro "Veículo" da demanda (04/11/2026). Pedido do usuário: quem abre uma demanda geral que prende o carro da frota (buscar material, levar material…) reserva o
 // veículo dali mesmo, com o motivo; a reserva aparece na Agenda das Viagens como ocupação do carro (ViagemReservas.ts) e some sozinha se a demanda for cancelada. A janela é a mesma da

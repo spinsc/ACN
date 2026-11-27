@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // VinculoPicker — seletor compartilhado de "vínculo opcional a um processo já
 // em andamento" (OP / OS / PV / Compra / OFI). Usado por qualquer tela que

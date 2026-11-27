@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // BomEmArvore — a BOM em PAI e FILHO (pedido do usuário em 29/10/2026)
 //

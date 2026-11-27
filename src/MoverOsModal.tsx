@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState } from 'react';
 import { Botao, Faixa, hojeISO } from './Interface';
 import Icone from './Icone';

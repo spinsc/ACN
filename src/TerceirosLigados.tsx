@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // SERVIÇOS DE TERCEIROS LIGADOS A UMA OP OU A UMA OS (T5 do módulo, 23/11/2026)
 //

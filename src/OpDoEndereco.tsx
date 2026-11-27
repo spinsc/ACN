@@ -1,4 +1,3 @@
-// @ts-nocheck
 // O hospedeiro da janela da OP aberta PELO ENDEREÇO (plano PLANOS CONCLUIDOS/PLANO_ENDERECOS_E_ROTAS.md, Fase 2, 25/11/2026).
 //
 // Montado uma vez só, na casca do sistema (`DashboardTab`). Cuida dos casos em que quem pede a OP é o ENDEREÇO e não uma tela que já a tem em mãos:

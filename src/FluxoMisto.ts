@@ -1,4 +1,3 @@
-// @ts-nocheck
 // FLUXO MISTO — a mesma venda com unidades adaptadas aqui e unidades enviadas (pedido do usuário em 26/10/2026; desenho e decisões em PLANO_FLUXO_MISTO.md).
 // Cada grupo do lote customizável escolhe o seu fluxo de entrega; cada unidade vira uma OP /NN com o fluxo do seu grupo. Todas as filas e telas já leem o fluxo da própria OP, então o que muda
 // é só como a OP NASCE. "misto" é um valor só da tela: nenhuma OP o grava. Este módulo é a regra pura (sem tela), para testar sem navegador.

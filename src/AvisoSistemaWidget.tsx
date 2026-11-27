@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import Linkify from './Linkify';
@@ -6,7 +5,7 @@ import { explicarErroDoBanco } from './ErroDoBanco';
 import { confirmar } from './Feedback';
 import { podePublicarAviso, podeMexerNoAviso } from './utils/permissoes';
 import { Botao, Faixa } from './Interface';
-// 12e93 (27/11/2026): o formulário, a validade, as perguntas, as frases e a gravação (com a trava do clique duplo e a conferência da linha devolvida) são os MESMOS do painel
+// 12e92b (27/11/2026): o formulário, a validade, as perguntas, as frases e a gravação (com a trava do clique duplo e a conferência da linha devolvida) são os MESMOS do painel
 // do Admin e moram nestes dois módulos; antes este quadro tinha a cópia antiga, que dava por feita uma gravação que o banco negou.
 import {
   FORM_AVISO_VAZIO, PERGUNTA_DESCARTAR_ALTERACAO, PERGUNTA_DESCARTAR_RASCUNHO, criadoEmLabel, faltaTextoNoAviso, formDoAviso, mesmoFormAviso, perguntaDescartarAoAbrir,
@@ -170,7 +169,7 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
     document.addEventListener('mouseup', up);
   }, [pos]);
 
-  // ── publicar, editar e excluir (12e93: a gravação é a do painel do Admin, AvisosGravacao.ts) ──────────────────────────────
+  // ── publicar, editar e excluir (12e92b: a gravação é a do painel do Admin, AvisosGravacao.ts) ──────────────────────────────
   const zerarForm = () => { setEditId(null); setForm({ ...FORM_AVISO_VAZIO }); setOriginal({ ...FORM_AVISO_VAZIO }); };
   const fecharForm = () => { zerarForm(); setMostraForm(false); };
 
@@ -330,7 +329,7 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
             </div>
           )}
 
-          {/* leitura recusada: nunca vale como "nenhum aviso" (12e93) */}
+          {/* leitura recusada: nunca vale como "nenhum aviso" (12e92b) */}
           {erro && (
             <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>
               Não foi possível ler os avisos ({erro}). Isso não quer dizer que não haja nenhum publicado.

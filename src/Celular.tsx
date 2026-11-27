@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // CELULAR — ajuda para as telas se reorganizarem no telefone.
 //

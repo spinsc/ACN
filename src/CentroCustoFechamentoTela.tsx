@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // JANELA "FECHAMENTO DO MÊS" (Etapa 15e-2 do ux-fluxo, 05/10/2026) — Financeiro
 //

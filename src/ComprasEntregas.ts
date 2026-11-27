@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // ENTREGA POR FORNECEDOR (pedido do usuário em 17/11/2026; PLANO_ENTREGA_POR_FORNECEDOR.md)
 //

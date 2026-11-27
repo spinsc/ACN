@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // CORRIGIR A DATA DE UMA NOTA JÁ EMITIDA (pedido do usuário em 27/10/2026, no Fiscal)
 //

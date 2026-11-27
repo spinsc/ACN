@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // VIAGENS — ligações de verdade (pedido do usuário em 04/11/2026, fatia 3)
 //

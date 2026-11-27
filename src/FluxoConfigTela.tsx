@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIGURAÇÃO POR TIPO DE VENDA — o veículo é obrigatório aqui?
 //

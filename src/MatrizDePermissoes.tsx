@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Matriz "quem tem o quê" (Admin → Usuários → Matriz; 24/11/2026, pedido do usuário na revisão de permissões): uma linha por pessoa, uma coluna por tela ou permissão extra.
 // Só lê o que a lista de usuários já carregou; não grava nada. Imprime e baixa em planilha.
 import React, { useMemo, useState } from 'react';

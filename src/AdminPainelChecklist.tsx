@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // Painel "Checklist CQ" do Admin — os itens que a Qualidade confere em cada veículo (12e85, 26/11/2026). Saiu do AdminTab.tsx já no padrão do design system (`Botao`,
 // `Faixa`, `confirmar`, `mostrarAviso`, classes `acn-ckl-*` do design.css, sem `style` solto).

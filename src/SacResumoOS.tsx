@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React from 'react';
 import { Botao, Selo } from './Interface';
 import Icone from './Icone';

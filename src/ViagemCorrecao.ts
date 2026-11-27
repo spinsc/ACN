@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // VIAGENS — o Financeiro altera livremente o que é DELE, mas corrigir um campo já preenchido exige o motivo (regra definida com o usuário em 05/11/2026)
 //

@@ -25,6 +25,7 @@ import { ModalEditarOplLote, podeEditarOplCompleta, ModalOplComercial, CAMPOS_OP
 import { aplicarNoLote, lerOutrasUnidadesDoLote, camposDoLote, textoDoResultadoLote, loteComProblema } from './EdicaoDeLote';
 import { LinkLote } from './OpLote';
 import { loteTemEnvioEProducao, ehUnidadeDeEnvio } from './FluxoMisto';
+import { documentoParaGravar, formatarDocumento, erroDoDocumentoDoCliente } from './ClienteDocumentoOp';   // 27/11/2026
 import { SeloFluxosDoLote } from './FluxoMistoTela';
 import { itensDaFormacao } from './OpItens';
 import { CotacoesCrmPanel } from './CotacoesTab';
@@ -1135,6 +1136,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
       prazo_entrega_producao:   soData(completa.prazo_entrega_producao),
       data_aceite_cliente:      soData(completa.data_aceite_cliente),
       prazo_dias_apos_chegada:  completa.prazo_dias_apos_chegada == null ? '' : String(completa.prazo_dias_apos_chegada),   // 24/11/2026: o campo de tela é texto (só dígitos)
+      cliente_documento:        formatarDocumento(completa.cliente_documento),   // 27/11/2026: mostrado com a máscara; grava só os dígitos
     });
     setOplEditando(completa);
   };
@@ -1144,6 +1146,9 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
     // R17 (13/10/2026): o CEP de entrega que a pessoa mexeu precisa ser válido (a conferência da embalagem); o que já estava gravado e não mudou não trava a edição
     const recusaCep = await conferirCepAntesDeSalvar(oplFormEdit.destino_cep, 'CEP de entrega', oplEditando.destino_cep);
     if (recusaCep) { mostrarAviso(recusaCep, 'atencao'); return; }
+    // 27/11/2026: o CPF/CNPJ do cliente (pedido do Financeiro para cotar frete) só é conferido se foi digitado; OP antiga sem ele não trava a edição
+    const recusaDocumento = erroDoDocumentoDoCliente(oplFormEdit.cliente_documento, false);
+    if (recusaDocumento) { mostrarAviso(recusaDocumento, 'atencao'); return; }
     // 25/11/2026: "Somente serviço de terceiro" é uma rota inteira (a OP pula o PCP e espera o prestador): a edição comercial não troca de ou para ele; o Admin faz pela edição completa da OP
     if ((oplFormEdit.fluxo_entrega || '') !== (oplEditando.fluxo_entrega || '') && (soTerceiros(oplFormEdit.fluxo_entrega) || soTerceiros(oplEditando.fluxo_entrega))) {
       mostrarAviso('O fluxo "Somente serviço de terceiro" não se troca por esta tela: ele muda a etapa da OP. Peça ao Admin para trocar pela edição completa da OP.', 'atencao'); return;
@@ -1286,6 +1291,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
       // identificação
       cliente_nome:          txt(oplFormEdit.cliente_nome),
       cliente_final:         txt(oplFormEdit.cliente_final),
+      cliente_documento:     documentoParaGravar(oplFormEdit.cliente_documento),   // 27/11/2026: só dígitos; vale também para o lote inteiro
       tipo_projeto:          txt(oplFormEdit.tipo_projeto),
       faturamento_empresa:   txt(oplFormEdit.faturamento_empresa) || 'ACN',
       quantidade:            qtdNova,

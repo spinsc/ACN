@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // LIGAÇÃO ENTRE A GARANTIA E O DESENVOLVIMENTO DE PRODUTO — as regras (pedido do usuário em 22/10/2026)
 //

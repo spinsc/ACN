@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { confirmarRemocao } from './Feedback';
 // 23/10/2026: usa o cliente compartilhado (que leva o crachá de quem entrou). Esta tela tinha um cliente PRÓPRIO só com a chave pública: desde a Etapa 17 (22/10) o banco

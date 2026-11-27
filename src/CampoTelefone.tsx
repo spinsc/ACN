@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // CAMPO DE TELEFONE — o mesmo comportamento em todo formulário que pede telefone (pedido do usuário em 04/11/2026)
 //

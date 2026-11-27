@@ -38,6 +38,7 @@ import { CampoCep } from './CampoCep';
 import { conferirCepAntesDeSalvar, cepParaGravar } from './Cep';
 import { FLUXO_MISTO, ROTULO_FLUXO_MISTO, validarFluxosDosGrupos, ajustarOpPeloFluxoDoGrupo, dividirSoEntreElegiveis, grupoEhDeEnvio, grupoPrecisaFrete, resumoDosFluxos } from './FluxoMisto';
 import { CampoMoeda } from './CampoMoeda';
+import { fluxoPedeDocumentoDoCliente, formatarDocumento, documentoParaGravar, erroDoDocumentoDoCliente } from './ClienteDocumentoOp';   // 27/11/2026
 
 // ─── Upload inline de anexos (pós-criação da OP) ─────────────────────────────
 function UploadAnexosInline({ oplId, oplNumero, currentUser }) {
@@ -197,6 +198,9 @@ const VAZIO = {
   // ── Comum ─────────────────────────────────────────────────────────────────
   cliente_nome:           '',
   _cliente_id:            null,
+  // 27/11/2026 (pedido do Financeiro): CPF/CNPJ do cliente, obrigatório no fluxo de envio de material (o frete é cotado com ele); `_doc_auto` marca o que veio do cadastro, para sumir se a pessoa trocar o cliente
+  cliente_documento:      '',
+  _doc_auto:              false,
   responsavel:            '',
   data_entrada:           hojeISO(),
 };
@@ -284,6 +288,17 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
   // Prazo (24/11/2026): a OP com veículo (adaptação) pede os DIAS depois da chegada; o que sai embalado (envio, OS) segue pedindo a DATA. No fluxo misto vale cada um para as unidades do seu fluxo.
   // 25/11/2026 (pedido do usuário): a OP "Somente serviço de terceiro" não espera carro nenhum na matriz (o serviço é feito por quem é de fora), então o prazo dela é uma DATA, como no envio; não tem mão de obra nem previsão de chegada do veículo
   const soServicoDeTerceiro = form.tipo === 'OP' && !ehVendaEnvio && !ehFluxoMisto && soTerceiros(fluxoEf);
+  const pedeDocumentoDoCliente = form.tipo === 'OP' && fluxoPedeDocumentoDoCliente(ehFluxoMisto ? grupos.map((g: any) => g.fluxo) : [fluxoEf]);
+  // 27/11/2026: cliente já ligado (escolhido da lista ou vindo do card do CRM) e com documento no cadastro: o campo vem preenchido; falha de leitura só deixa o campo para digitar
+  useEffect(() => {
+    if (!form._cliente_id || form.cliente_documento) return;
+    let vivo = true;
+    supabase.from('clientes').select('documento').eq('id', form._cliente_id).maybeSingle().then(({ data }) => {
+      const d = documentoParaGravar(data?.documento);
+      if (vivo && d) setForm(f => (f._cliente_id === form._cliente_id && !f.cliente_documento ? { ...f, cliente_documento: formatarDocumento(d), _doc_auto: true } : f));
+    });
+    return () => { vivo = false; };
+  }, [form._cliente_id]);
   const temUnidadeDeAdaptacao = form.tipo === 'OP' && !ehVendaEnvio && !soServicoDeTerceiro && (ehFluxoMisto ? grupos.some((g: any) => !grupoEhDeEnvio(g)) : !soEnvio(fluxoEf));
   const temUnidadeDeEnvio = form.tipo !== 'OP' || ehVendaEnvio || soServicoDeTerceiro || (ehFluxoMisto ? grupos.some((g: any) => grupoEhDeEnvio(g)) : soEnvio(fluxoEf));
   // Fluxo misto: a regra "veículo obrigatório" é da Administração POR FLUXO, então lê-se uma vez para cada fluxo que os grupos escolheram (uma leitura que falha barra o salvar, como na venda comum)
@@ -441,6 +456,8 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
   const executarSalvar = async () => {
     setErro('');
     if (!form.cliente_nome.trim()) { setErro('Informe o cliente.'); return; }
+    // 27/11/2026: envio de material pede o CPF/CNPJ do cliente já na abertura (o Financeiro cota o frete com ele); no fluxo misto vale se algum grupo é de envio de material
+    { const faltaDoc = erroDoDocumentoDoCliente(form.cliente_documento, pedeDocumentoDoCliente); if (faltaDoc) { setErro(faltaDoc); return; } }
     if (form.tipo === 'OP' && !form.opl.trim()) {
       setErro(semPv ? 'Informe o número da OP.' : 'Informe o pedido de venda (4 dígitos) ou marque "OP sem pedido de venda".'); return;
     }
@@ -619,6 +636,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           cliente_nome:           form.cliente_nome.trim(),
           // 27/11/2026: o cadastro escolhido (ou o do card do CRM) fica gravado na OP; sem ele o Fiscal só achava o cliente pelo nome escrito. Digitar por cima do nome desfaz a escolha.
           cliente_id:             form._cliente_id || null,
+          cliente_documento:      form.tipo === 'OP' ? documentoParaGravar(form.cliente_documento) : null,
           responsavel_comercial:  form.responsavel.trim(),
           observacoes_comercial:  form.observacoes || null,
           // Etapa 18e (13/10/2026): a OP nasce direto no PCP (decisão do usuário em 12/10/2026: a Engenharia só recebe pedidos de desenvolvimento)
@@ -869,10 +887,18 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
             <div className="acn-nop-rot">Cliente *</div>
             <ClienteAutocomplete
               value={form.cliente_nome}
-              onChange={v => setForm(f => ({ ...f, cliente_nome: v, _cliente_id: null }))}
-              onSelect={c => setForm(f => ({ ...f, cliente_nome: c.nome, _cliente_id: c.id }))}
+              onChange={v => setForm(f => ({ ...f, cliente_nome: v, _cliente_id: null, ...(f._doc_auto ? { cliente_documento: '', _doc_auto: false } : {}) }))}
+              onSelect={c => setForm(f => ({ ...f, cliente_nome: c.nome, _cliente_id: c.id, ...(documentoParaGravar(c.documento) ? { cliente_documento: formatarDocumento(c.documento), _doc_auto: true } : (f._doc_auto ? { cliente_documento: '', _doc_auto: false } : {})) }))}
               placeholder="Nome do cliente..."
             />
+            {isOP && (
+              <div className="acn-nop-doc">
+                <div className="acn-nop-rot">CPF/CNPJ do cliente{pedeDocumentoDoCliente ? ' *' : ''}</div>
+                <input className="acn-input" inputMode="numeric" value={form.cliente_documento} placeholder="CPF ou CNPJ"
+                  onChange={e => setForm(f => ({ ...f, cliente_documento: formatarDocumento(e.target.value), _doc_auto: false }))} />
+                <div className="acn-ajuda">{pedeDocumentoDoCliente ? 'Obrigatório no envio de material: o Financeiro cota o frete com este número.' : 'Opcional neste fluxo.'}</div>
+              </div>
+            )}
           </div>
 
           {/* Campos OP */}

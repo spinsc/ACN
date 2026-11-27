@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // ATENDIMENTO EM GARANTIA — quem é avisado de quê (G5 do PLANO_GARANTIA.md, 20/10/2026)
 //

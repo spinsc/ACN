@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // ATENDIMENTO EM GARANTIA — quadro de custos, alinhamento com o cliente e autorização da direção (G3 do PLANO_GARANTIA.md, 19/10/2026)
 //

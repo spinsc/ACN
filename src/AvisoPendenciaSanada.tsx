@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // O aviso grande, no meio da tela do Almoxarifado, de que a pendência de uma OP foi sanada (pedido do usuário em 27/10/2026).
 // As regras e a gravação do "Entendi" estão em PendenciasSanadas.ts.

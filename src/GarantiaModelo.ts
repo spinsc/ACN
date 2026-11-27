@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // ATENDIMENTO EM GARANTIA — as regras da ficha (G1 do PLANO_GARANTIA.md, 19/10/2026)
 //

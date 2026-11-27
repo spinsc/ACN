@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Serviços de terceiros: a janela que antecede a impressão do CONTRATO e da ORDEM DE SERVIÇO (fatia T4 do PLANO_SERVICOS_TERCEIROS.md, 23/11/2026).
 // Pergunta só o que muda a folha: qual empresa contrata (ACN ou DETECH; já vem a da OP) e avisa em vermelho enquanto o texto não foi aprovado (a folha sai com a faixa "MINUTA").
 // O clique em "Imprimir" chama a impressão DIRETO, sem nenhuma espera antes: o navegador só abre a janela de impressão dentro do clique (a regra está em TerceirosImpressao.ts).

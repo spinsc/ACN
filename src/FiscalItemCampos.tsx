@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Os dados fiscais de UM item, dentro da janela do item (preparação do módulo fiscal, 26/11/2026). Peça autônoma, como a do cliente: lê e grava sozinha em `fiscal_itens`
 // (uma linha por item, criada só quando alguém responde), com o botão próprio "Salvar dados fiscais". O NCM e o IPI (%) continuam sendo campos do próprio item.
 import React, { useEffect, useState } from 'react';

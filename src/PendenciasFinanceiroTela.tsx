@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // FINANCEIRO — a aba "Pendências" (04/11/2026). As regras estão em PendenciasFinanceiro.ts.
 // A tela só LISTA o que espera o Financeiro; clicar abre a janela da viagem, onde o trabalho é feito.

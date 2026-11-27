@@ -1,5 +1,5 @@
-// @ts-nocheck
 import { nomeDoPedido } from './NomeDoPedido';
+import { formatarDocumento } from './ClienteDocumentoOp';   // 27/11/2026
 import { lerEntregasDosPedidos, temEntrega, chegadaDoPedido } from './ComprasEntregas';
 import { PrevisaoDoPedido } from './ComprasEntregasView';
 import { supabase } from './supabaseClient';
@@ -1048,7 +1048,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
             subtitulo="O pedido vai para o Compras ligado a esta OP: ele aparece aqui, com o andamento."
             valorInicial={{ titulo: `Compra para a OP ${opl.opl}${opl.cliente_nome ? ' — ' + opl.cliente_nome : ''}`, vinculo: { tipo: 'op', id: String(opl.id), descricao: `${opl.opl}${opl.cliente_nome || opl.modelo ? ' — ' + (opl.cliente_nome || opl.modelo) : ''}` } }}
             origemSetor={String(usuario?.perfil || 'Sistema').replace(/^Gerente\s+/i, '')} opl={opl.opl} contexto={`OP ${opl.opl}`}
-            unidadesDoLote={qtdLote}
+            unidadesDoLote={qtdLote} itensVendidos={Array.isArray(opl.itens_vendidos) ? opl.itens_vendidos : []}
             onClose={() => setPedindoCompra(false)}
             onCriada={(r: any) => { setAvisoCompra(`Requisição ${r.numero_pedido} enviada ao Compras, ligada à OP ${opl.opl}.`); setTickCompras(t => t + 1); }} />
         </Suspense>
@@ -1370,6 +1370,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
                 <Campo label="Empresa"           value={opl.faturamento_empresa} />
                 <Campo label="Tipo de Projeto"   value={opl.tipo_projeto} />
                 <Campo label="Cliente"           value={opl.cliente_nome} full />
+                <Campo label="CPF/CNPJ do cliente" value={formatarDocumento(opl.cliente_documento)} field="cliente_documento" />
                 <Campo label="Cliente final"     value={opl.cliente_final} field="cliente_final" />
                 <Campo label="Vendedor"          value={opl.vendedor} field="vendedor" />
                 <Campo label="Canal de venda"    value={opl.canal_venda} field="canal_venda" />

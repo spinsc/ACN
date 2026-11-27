@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Excluir um card do Comercial (CRM) ou uma Licitação — quem pode e o que impede.
 // Pedido do usuário em 07/10/2026: só Admin e gerente; o gerente só do próprio setor (Gerente Comercial no Comercial, Gerente de Licitações nas Licitações).
 // Confere o perfil REAL do cadastro — não o "perfil com poderes" (utils/permissoes.ts perfilComPoderes), que dá a toda a equipe do setor os poderes do gerente.

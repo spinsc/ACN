@@ -1140,6 +1140,10 @@ html body .modal-box.acn-modal-cadastro.acn-compra-jan { width: min(640px, 95vw)
 .acn-ms-itens { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
 /* 10/11/2026: a janela "Ver" mostra tudo o que foi preenchido; a lista de andamentos pode ser longa, então rola dentro da janela. */
 .acn-ms-rolagem { max-height: 220px; overflow-y: auto; padding-right: 6px; }
+/* anexar arquivo a uma compra pedida (27/11/2026): botão, dica e, ao arrastar um arquivo por cima, borda tracejada */
+.acn-ms-anexar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; padding: 8px; border: 1.5px dashed transparent; border-radius: var(--acn-r3); }
+.acn-ms-anexar.arrastando { border-color: var(--acn-brand); background: color-mix(in srgb, var(--acn-brand) 8%, transparent); }
+.acn-ms-anexar .acn-faixa { flex: 1 1 100%; }
 .acn-ms-secao { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--acn-line); font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--acn-muted); }
 /* ── Kanban do SAC (05/10/2026): 3 colunas lado a lado; no celular uma embaixo da outra. Só aparência ── */
 .acn-kb { display: grid; grid-template-columns: repeat(3, minmax(250px, 1fr)); gap: 12px; align-items: start; overflow-x: auto; }
@@ -3502,6 +3506,10 @@ html body .acn-b.acn-cta-banner-x { color: #fff; }
 html body .modal-overlay.acn-anx-ov { z-index: 2000; }
 html body .modal-box.acn-modal-cadastro.acn-anx-jan { width: min(620px, 96vw); max-width: 620px; max-height: 85vh; }
 .acn-anx-cab-txt { display: grid; gap: 2px; }
+/* arrastando arquivo por cima da janela (27/11/2026): borda tracejada na janela inteira e a faixa de cima em destaque */
+html body .modal-box.acn-modal-cadastro.acn-anx-jan.arrastando { outline: 3px dashed var(--acn-brand); outline-offset: -8px; }
+.acn-anx-jan.arrastando .acn-anx-upload { background: color-mix(in srgb, var(--acn-brand) 10%, var(--acn-surface-2)); }
+.acn-anx-jan.arrastando .acn-anx-upload .acn-ajuda { color: var(--acn-brand); font-weight: 700; }
 .acn-anx-upload { display: grid; gap: 8px; padding: 10px 16px; flex-shrink: 0; background: var(--acn-surface-2); border-bottom: 1px solid var(--acn-line); }
 .acn-anx-envio { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 html body label.acn-b.acn-anx-anexar { cursor: pointer; background: var(--acn-anx-cor, var(--acn-info)); border-color: var(--acn-anx-cor, var(--acn-info)); color: #fff; }
@@ -3989,6 +3997,8 @@ html body .sec-body.acn-fer-tabela { overflow-x: auto; padding: 0; }
 .acn-sco-prio { display: flex; gap: 6px; }
 /* 24/11/2026: caixa "vale para o lote inteiro" do pedido de compra de um lote (SolicitacaoCompra.tsx) */
 .acn-sco-lote { background: var(--acn-surface-2, rgba(0,0,0,.03)); border: 1px solid var(--acn-line); border-radius: 8px; padding: 10px 12px; }
+.acn-sco-sugerir { display: grid; gap: 8px; justify-items: start; margin-bottom: 8px; }
+.acn-sco-sugerir .acn-faixa { justify-self: stretch; }
 .acn-sco-lote-previa { margin-top: 6px; font-size: 13px; color: var(--acn-ink); display: grid; gap: 2px; }
 html body .modal-overlay.acn-sco-fundo { z-index: 2600; }
 
@@ -4694,6 +4704,12 @@ html body .acn-b.acn-nop-b.acn-nop-fechar { padding: 1px 6px; color: #ffffff; fo
 .acn-nop-gr.g211 { grid-template-columns: 2fr 1fr 1fr; }
 .acn-nop-gr.g3 { grid-template-columns: 1fr 1fr 1fr; }
 .acn-nop-bl { margin-bottom: 10px; }
+/* 27/11/2026: CPF/CNPJ do cliente logo abaixo do cliente (obrigatório no envio de material); dentro de grade o campo não pode passar da coluna */
+.acn-nop-doc { display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; margin-top: 8px; }
+.acn-nop-doc .acn-input { width: 100%; min-width: 0; box-sizing: border-box; }
+/* 27/11/2026: CPF/CNPJ do cliente na janela do frete (preencher ou pedir ao vendedor) */
+.acn-log-doc { display: grid; gap: 8px; }
+.acn-log-doc-campo { width: 100%; max-width: 260px; min-width: 0; box-sizing: border-box; }
 .acn-nop-rot { margin-bottom: 3px; color: #475569; font-size: 12px; font-weight: 700; line-height: 1.45; }
 .acn-nop-rot.r4 { margin-bottom: 4px; }
 .acn-nop-rot-box { margin-bottom: 5px; color: #334155; font-size: 12px; font-weight: 800; line-height: 1.45; }
@@ -7882,3 +7898,18 @@ html body .modal-box.acn-modal-cadastro.acn-perf-jan { width: min(780px, 96vw); 
 .acn-avsa-item .acn-avs-tags { flex-wrap: wrap; align-items: center; }
 .acn-avsa-acoes { display: flex; justify-content: flex-end; gap: 4px; margin-top: 6px; }
 @media (max-width: 900px) { .acn-avsa { grid-template-columns: minmax(0, 1fr); } }
+
+/* ── 12e93 (27/11/2026): painel Plataformas do Admin (AdminPainelPlataformas) ──
+   Tabela do guia + janela de edição. Campo dentro de grade: coluna minmax(0, 1fr) e controle com largura 100% (regra do CLAUDE.md). */
+.acn-plat-barra { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.acn-plat .acn-faixa + .acn-faixa { margin-top: 8px; }
+.acn-plat-c { text-align: center; }
+.acn-plat-desc { color: var(--acn-ok); font-weight: 700; }
+.acn-plat-ret { color: var(--acn-bad); font-weight: 700; }
+.acn-plat-inativa td { opacity: .55; }
+.acn-plat-acoes { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
+html body .modal-box.acn-modal-cadastro.acn-plat-jan { width: min(560px, 96vw); max-width: 560px; }
+.acn-plat-campos { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: end; }
+.acn-plat-campos .form-group { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; min-width: 0; flex: 0 0 auto; }
+.acn-plat-campos .acn-input { width: 100%; min-width: 0; box-sizing: border-box; }
+@media (max-width: 560px) { .acn-plat-campos { grid-template-columns: minmax(0, 1fr); } }

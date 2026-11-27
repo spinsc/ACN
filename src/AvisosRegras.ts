@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Regras dos avisos do sistema, as MESMAS no painel do Admin (AdminPainelAvisos) e no quadro flutuante 📌 (AvisoSistemaWidget) — 12e93, 27/11/2026.
+// Regras dos avisos do sistema, as MESMAS no painel do Admin (AdminPainelAvisos) e no quadro flutuante 📌 (AvisoSistemaWidget) — 12e92b, 27/11/2026.
 // Antes cada tela tinha a sua cópia (e o quadro flutuante ficou com os defeitos que o painel já tinha corrigido na 12e92). Aqui só mora o que é puro: o formulário, a
 // validade, a comparação "tem algo digitado a perder?" e as frases. A gravação (e a trava do clique duplo) está em AvisosGravacao.ts.
 // A regra de quem pode o quê NÃO está aqui (continua em utils/permissoes.ts: só Admin publica; editar, desativar e excluir só o autor ou quem tem a marca DEV).

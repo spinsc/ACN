@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // PONTO PARA O RH (20/11/2026): as regras da aba RH › Relógio Ponto, sem tela e sem banco (por isso se testam em Node).
 //

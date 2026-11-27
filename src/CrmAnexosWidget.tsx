@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { enviarArquivoPrivado } from './ArquivoPrivado';   // 26/11/2026 (plano do bucket privado, B3)
@@ -71,7 +70,24 @@ function ModalAnexos({ op, currentUser, onClose }: { op: any; currentUser: any; 
 
   useEffect(() => { reload(); }, [reload]);
 
-  const upload = async (files: FileList) => {
+  // Arrastar e soltar (pedido do Comercial, 27/11/2026, o mesmo da janela de arquivos da OP): soltar arquivos em qualquer ponto da janela anexa, como o botão "Anexar",
+  // e o arquivo entra com o tipo escolhido nas fichas de cima. Aqui qualquer formato vale (ver o comentário da CONFIG). O contador evita que a marca de
+  // "solte aqui" pisque quando o arquivo passa por cima dos elementos de dentro da janela.
+  const [arrastando, setArrastando] = useState(false);
+  const sobreJanela = useRef(0);
+  const temArquivos = (e: React.DragEvent) => Array.from(e.dataTransfer?.types || []).includes('Files');
+  const aoEntrar = (e: React.DragEvent) => { if (!temArquivos(e)) return; e.preventDefault(); sobreJanela.current++; setArrastando(true); };
+  const aoSair = (e: React.DragEvent) => { if (!temArquivos(e)) return; sobreJanela.current = Math.max(0, sobreJanela.current - 1); if (!sobreJanela.current) setArrastando(false); };
+  const aoPassar = (e: React.DragEvent) => { if (!temArquivos(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = uploading ? 'none' : 'copy'; };
+  const aoSoltar = (e: React.DragEvent) => {
+    if (!temArquivos(e)) return;
+    e.preventDefault(); sobreJanela.current = 0; setArrastando(false);
+    if (uploading) return;   // já tem um envio andando: não mistura
+    const lista = Array.from(e.dataTransfer.files || []);
+    if (lista.length) upload(lista);
+  };
+
+  const upload = async (files: FileList | File[]) => {
     setUploading(true);
     const falhas: string[] = [];
     for (let i = 0; i < files.length; i++) {
@@ -128,7 +144,8 @@ function ModalAnexos({ op, currentUser, onClose }: { op: any; currentUser: any; 
   return (
     <div className="modal-overlay acn-anx-ov"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box acn-modal-cadastro acn-anx-jan" role="dialog" aria-label="Documentos e imagens">
+      <div className={'modal-box acn-modal-cadastro acn-anx-jan' + (arrastando ? ' arrastando' : '')} role="dialog" aria-label="Documentos e imagens"
+        onDragEnter={aoEntrar} onDragOver={aoPassar} onDragLeave={aoSair} onDrop={aoSoltar}>
 
         {/* Header */}
         <div className="acn-modal-cab">
@@ -156,6 +173,7 @@ function ModalAnexos({ op, currentUser, onClose }: { op: any; currentUser: any; 
             <span className="acn-ajuda">
               {tipoAtual.accept.replace(/\*/g, 'todos os formatos')}
             </span>
+            <span className="acn-ajuda">{arrastando ? `Solte os arquivos para anexar como ${tipoAtual.label}.` : 'Ou arraste os arquivos para dentro desta janela.'}</span>
           </div>
         </div>
 

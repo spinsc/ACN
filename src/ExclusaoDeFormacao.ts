@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Excluir uma formação de preços — quem pode, o que impede, o que sai junto e a gravação (pedido do usuário em 17/11/2026).
 // Decidido com o usuário: a formação NÃO é apagada (fica guardada, marcada como excluída com quem, quando e o motivo, e some de todas as telas); a pessoa escolhe
 // na hora se exclui SÓ A VERSÃO aberta ou a FORMAÇÃO INTEIRA; pode excluir quem criou, Admin e gerentes; só barra o que já virou compromisso (OP ligada, aprovada

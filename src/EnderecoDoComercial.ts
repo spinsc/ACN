@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // ENDEREÇO DE ENVIO É DO COMERCIAL (pedido do usuário em 26/11/2026)
 //

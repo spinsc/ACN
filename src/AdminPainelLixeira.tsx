@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // Painel "Lixeira (24h)" do Admin — restaurar registros que foram deletados nas últimas 24 horas (12e87, 26/11/2026). Saiu do AdminTab.tsx já no padrão do design system (`Botao`,
 // `Faixa`, `Selo`, `Tag`, `Chips`, a tabela do guia, `confirmar` e `mostrarAviso`, sem `style` solto).

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Data da nota ao faturar (pedido do usuário em 26/10/2026): o Fiscal passou a lançar também notas de meses passados, e até aqui a data da nota era sempre o
 // instante do clique ("data_emissao_nf = agora"). Regra decidida: o campo vem com HOJE; deixar como está (ou em branco) registra agora, exatamente como antes;
 // escolher um dia anterior lança a nota com aquele dia. Data futura é recusada. Esta data é a que o relatório de faturamento do mês, a comissão por faturamento e

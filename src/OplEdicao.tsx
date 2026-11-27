@@ -404,6 +404,8 @@ const OPC = (lista: string[]) => lista.map(v => ({ valor: v, label: v || '—' }
 export const CAMPOS_OPL_COMERCIAL: CampoCom[] = [
   // ── Identificação ──
   { grupo: 'Identificação', campo: 'cliente_nome', rotulo: 'Cliente', tipo: 'texto' },
+  // 27/11/2026 (pedido do Financeiro): o frete do envio de material é cotado com o CPF/CNPJ do cliente; pedido na abertura da OP e corrigido aqui
+  { grupo: 'Identificação', campo: 'cliente_documento', rotulo: 'CPF/CNPJ do cliente', tipo: 'texto', dica: 'obrigatório no envio de material (o Financeiro cota o frete com ele)' },
   { grupo: 'Identificação', campo: 'cliente_final', rotulo: 'Cliente final', tipo: 'texto', dica: 'quando quem recebe não é quem compra' },
   { grupo: 'Identificação', campo: 'tipo_projeto', rotulo: 'Tipo de projeto', tipo: 'select' },
   { grupo: 'Identificação', campo: 'faturamento_empresa', rotulo: 'Empresa', tipo: 'select', opcoes: OPC(['ACN', 'Detech']) },

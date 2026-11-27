@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Serviços de terceiros: a aba "Ordens de pintura" (fatia T4 do PLANO_SERVICOS_TERCEIROS.md, 23/11/2026): as ordens de serviço em lote e, em cima delas, a fila dos serviços que esperam uma ordem.
 // Montar a ordem é de quem pode mexer nela (Admin, gerentes e Adaptação); os outros veem as ordens, abrem e imprimem. A lógica está em TerceirosOrdens.ts; a janela da ordem, em TerceirosOrdemModal.tsx.
 import React, { useMemo, useState } from 'react';

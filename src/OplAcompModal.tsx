@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // OplAcompModal — Modal de acompanhamentos (log histórico) para OPs e OSes
 //

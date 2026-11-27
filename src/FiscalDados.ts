@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Leitura e gravação dos cadastros fiscais (preparação do módulo fiscal, 26/11/2026; as regras puras estão em FiscalRegras.ts e as tabelas em supabase/sql/fiscal_cadastros.sql).
 // Padrão do sistema: leitura recusada devolve `erro` (nunca "sem cadastro"), e toda gravação confere a linha devolvida (o banco responde "ok, 0 linhas" a um UPDATE negado).
 import { supabase } from './supabaseClient';

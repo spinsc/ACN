@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // PEÇAS DA TELA "ESTRUTURA DE INSTALAÇÃO" (16/10/2026, redesenho pedido pelo usuário)
 //

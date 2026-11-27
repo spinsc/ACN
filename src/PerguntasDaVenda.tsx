@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // PERGUNTAS SOBRE O CARRO, NA ABERTURA DA OPL
 //

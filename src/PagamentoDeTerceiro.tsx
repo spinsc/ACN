@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // DEMANDAS GERAIS DO FINANCEIRO — pedido de pagamento a terceiro (pedido do usuário em 05/11/2026)
 //

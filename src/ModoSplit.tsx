@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // MODO DE EXIBIÇÃO DO CARD ABERTO (Licitações e Comercial/CRM)
 // O card abre dividido: formulário à esquerda, abas (formação de preço,

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // REMESSAS — envio parcial de uma OP de "Venda para Envio" (fatia 5 do PLANO_RH_DEPARTAMENTOS_ENVIOS.md, 14/10/2026)
 //

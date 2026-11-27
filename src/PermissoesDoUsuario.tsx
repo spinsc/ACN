@@ -1,4 +1,3 @@
-// @ts-nocheck
 // As abas e as permissões extras de UMA pessoa, agrupadas como o menu (24/11/2026, pedido do usuário). Usada no "Editar usuário" e no "Novo usuário" do Admin.
 // `valor` é o formulário (abas_permitidas e as colunas das permissões extras); `onChange(patch)` devolve só o que mudou.
 import React from 'react';

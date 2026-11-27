@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { intervaloVisivel } from './IntervaloVisivel';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { confirmarRemocao } from './Feedback';

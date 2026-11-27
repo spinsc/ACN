@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Janela "Cargos" do RH (16/11/2026): quem tem a tela de RH cria e exclui cargos, como já faz com os departamentos (DepartamentosRH.tsx).
 // Pedido do usuário em 16/11/2026: o RH cadastra todos os cargos e corrige os colaboradores um a um, escolhendo na ficha um ou mais.
 import React, { useState } from 'react';

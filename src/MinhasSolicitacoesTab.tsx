@@ -223,7 +223,7 @@ export default function MinhasSolicitacoesTab({ currentUser }: any) {
         </div>
       </div>
 
-      {ver && <JanelaSolicitacao item={ver} verValores={verValores} solicitante={nome} onClose={() => setVer(null)} />}
+      {ver && <JanelaSolicitacao item={ver} verValores={verValores} solicitante={nome} currentUser={currentUser} onClose={() => setVer(null)} />}
     </div>
   );
 }
@@ -283,7 +283,50 @@ function dadosDaCompra(b: any) {
   return { itens, prioridade, observacoes, texto, fornecedorEhSugestao };
 }
 
-function JanelaSolicitacao({ item, verValores, solicitante, onClose }: any) {
+// 27/11/2026 (pedido da Tati): depois de abrir a compra, quem pediu recebe um orçamento e precisa anexá-lo ao pedido que o Compras vai transformar em OC.
+// O arquivo entra pelo mesmo caminho do Compras (`enviarAnexosCompra`: bucket privado, tabela de anexos do pedido) e deixa a linha "Anexou: …" no histórico,
+// então o comprador o vê na Mesa de Cotações e no Resumo. Só acrescenta: remover anexo continua sendo do Compras. Pedido descartado não recebe mais arquivo.
+function AnexarNaCompra({ pedido, currentUser, aoAnexar }: any) {
+  const [enviando, setEnviando] = useState(false);
+  const [aviso, setAviso] = useState<{ tom: 'ok' | 'atencao' | 'erro'; texto: string } | null>(null);
+  const [arrastando, setArrastando] = useState(false);
+  const sobre = React.useRef(0);   // o contador evita a marca piscar quando o arquivo passa por cima dos elementos de dentro da caixa
+  const enviar = async (lista: File[]) => {
+    if (enviando || !lista.length) return;
+    setEnviando(true); setAviso(null);
+    try {
+      const { enviarAnexosCompra, registrarHistorico } = await import('./ComprasFluxo');   // só baixa quando a pessoa anexa
+      const erros: any = await enviarAnexosCompra(pedido.id, lista, currentUser);
+      const enviados: string[] = erros.enviados || [];
+      let historicoOk = true;
+      if (enviados.length) historicoOk = await registrarHistorico(pedido.id, { tipo: 'anexo', motivo: `Anexou: ${enviados.join(', ')}` }, currentUser);
+      await aoAnexar();
+      const falhou = erros.length ? ` Não foram enviados: ${erros.join(' · ')}.` : '';
+      const semRegistro = enviados.length && !historicoOk ? ' O arquivo foi anexado, mas a linha no histórico do pedido não foi gravada.' : '';
+      if (enviados.length) setAviso({ tom: erros.length || !historicoOk ? 'atencao' : 'ok', texto: `${enviados.length === 1 ? 'Arquivo anexado' : enviados.length + ' arquivos anexados'} ao pedido. O Compras já pode ver.${falhou}${semRegistro}` });
+      else setAviso({ tom: 'erro', texto: `Não foi possível anexar.${falhou}` });
+    } catch (e: any) {
+      setAviso({ tom: 'erro', texto: 'Não foi possível anexar: ' + (e?.message || e) });
+    } finally { setEnviando(false); }
+  };
+  const temArquivos = (e: React.DragEvent) => Array.from(e.dataTransfer?.types || []).includes('Files');
+  return (
+    <div className={'acn-ms-anexar' + (arrastando ? ' arrastando' : '')}
+      onDragEnter={e => { if (!temArquivos(e)) return; e.preventDefault(); sobre.current++; setArrastando(true); }}
+      onDragOver={e => { if (!temArquivos(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = enviando ? 'none' : 'copy'; }}
+      onDragLeave={e => { if (!temArquivos(e)) return; sobre.current = Math.max(0, sobre.current - 1); if (!sobre.current) setArrastando(false); }}
+      onDrop={e => { if (!temArquivos(e)) return; e.preventDefault(); sobre.current = 0; setArrastando(false); enviar(Array.from(e.dataTransfer.files || [])); }}>
+      <label className={'acn-b acn-b-secundario acn-b-p' + (enviando ? ' ocupado' : '')}>
+        <input type="file" multiple hidden disabled={enviando} onChange={e => { const lista = Array.from(e.target.files || []); e.target.value = ''; enviar(lista); }} />
+        {enviando ? 'Enviando…' : '📎 Anexar arquivo'}
+      </label>
+      <span className="acn-ajuda">{arrastando ? 'Solte os arquivos para anexar.' : 'Orçamento, foto ou qualquer arquivo (até 20 MB cada). Dá para arrastar para cá.'}</span>
+      {aviso && <Faixa tom={aviso.tom}>{aviso.texto}</Faixa>}
+    </div>
+  );
+}
+
+function JanelaSolicitacao({ item, verValores, solicitante, currentUser, onClose }: any) {
   const b = item.bruto;
   const avulsa = item.tipo === 'demanda' && item.origemTabela === 'avulsa';
   const setorial = item.tipo === 'demanda' && item.origemTabela === 'setorial';
@@ -320,6 +363,13 @@ function JanelaSolicitacao({ item, verValores, solicitante, onClose }: any) {
     })();
     return () => { vivo = false; };
   }, [item.chave]);
+
+  // depois de anexar, a lista da janela é lida de novo do banco (nunca só somada na tela); leitura que falha avisa
+  const recarregarAnexos = async () => {
+    const { data, error } = await supabase.from('pcp_pedidos_compra_anexos').select('id,nome,url,criado_em').eq('pedido_id', b.id).order('criado_em');
+    if (error) setExtras((e: any) => ({ ...e, erros: [...e.erros.filter((x: string) => !x.startsWith('os anexos')), 'os anexos (' + error.message + ')'] }));
+    else setExtras((e: any) => ({ ...e, anexos: data || [], erros: e.erros.filter((x: string) => !x.startsWith('os anexos')) }));
+  };
 
   const c = item.tipo === 'compra' ? dadosDaCompra(b) : null;
   // anexos: a compra e a demanda avulsa vêm das tabelas; a demanda dos setores guarda os arquivos numa lista na própria linha
@@ -361,7 +411,14 @@ function JanelaSolicitacao({ item, verValores, solicitante, onClose }: any) {
             <Campo rot="Link">{b.link_url ? (enderecoDoLink(b.link_url) ? <a href={enderecoDoLink(b.link_url)!} target="_blank" rel="noreferrer">{b.link_url}</a> : b.link_url) : null}</Campo>
             <Campo rot="Observações">{txt(c.observacoes)}</Campo>
             <Campo rot="Observações da compra">{txt(b.observacoes)}</Campo>
-            {extras.anexos.length > 0 && <Campo rot="Anexos"><ListaDeArquivos arquivos={extras.anexos} /></Campo>}
+            {(extras.anexos.length > 0 || (extras.pronto && b.status_compra !== 'Descartada')) && (
+              <Campo rot="Anexos">
+                {extras.anexos.length > 0 && <ListaDeArquivos arquivos={extras.anexos} />}
+                {extras.pronto && b.status_compra !== 'Descartada' && (
+                  <AnexarNaCompra pedido={b} currentUser={currentUser} aoAnexar={recarregarAnexos} />
+                )}
+              </Campo>
+            )}
             <Campo rot="Solicitado por">{[b.criado_por_nome || b.criado_por, b.criado_por_setor].filter(Boolean).join(' · ')}</Campo>
             {/* o título só entra quando há algo do andamento para mostrar (compra recém-pedida não tem nada disso) */}
             {(b.numero_oc || (verValores && b.valor_compra != null && b.valor_compra !== '') || b.data_prevista_recebimento || b.forma_recebimento === 'coleta' || b.data_recebimento_real || b.reprocessos || String(b.motivo_descarte || '').trim()) && <Secao>Andamento da compra</Secao>}

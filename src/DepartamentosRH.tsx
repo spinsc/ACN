@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Janela "Departamentos" do RH (14/10/2026, PLANO_RH_DEPARTAMENTOS_ENVIOS.md, fatia 1): quem tem a tela de RH cria e exclui departamentos.
 // Decisão do usuário em 14/10/2026: "o próprio RH cria ou exclui departamentos (Admin e gerentes também podem); quem tem permissão da tela de RH faz isso".
 import React, { useState } from 'react';

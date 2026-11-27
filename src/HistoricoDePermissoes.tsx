@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Histórico de permissões (Admin → Usuários → Histórico; 24/11/2026, revisão de permissões): quem mudou a permissão de quem, quando, de quê para quê.
 // Lê o audit_log que o gatilho do banco preenche (auth_usuarios_registrar_permissoes): o autor é o do crachá, não um nome informado pela tela.
 // Só leitura. Leitura recusada mostra o erro, nunca "nenhuma mudança".

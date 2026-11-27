@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Plano "toda pessoa por ID" (PLANO_USUARIOS_POR_ID.md), etapa U4 — 24/11/2026.
 // O ID do usuário (`auth_usuarios.id`) é a identidade; o nome é só texto para mostrar. No banco, toda coluna de pessoa (`responsavel_nome`, `criado_por_nome`…)
 // tem o ID ao lado (`<coluna>_pessoa_id`), mantido por gatilho; renomear um usuário leva o nome novo a todas elas. Estas funções são o jeito de a tela

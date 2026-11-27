@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // Formação de preço da demanda avulsa — pedido do usuário em 16/10/2026: o vínculo com a formação de preço é do PROCESSO da demanda, então se faz direto no
 // detalhe dela, sem passar pelo "Editar" (que é para mexer no texto, nos itens e nos outros vínculos).

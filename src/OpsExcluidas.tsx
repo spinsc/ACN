@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // OPs excluídas — o quadro da aba "OPs em aberto" do CRM e a janela de leitura (pedido do usuário em 11/11/2026)
 //

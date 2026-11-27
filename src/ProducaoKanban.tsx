@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // KANBAN DA PRODUÇÃO — visualização alternativa à tabela.
 //

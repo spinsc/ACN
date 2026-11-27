@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // ItensAgrupados — a separação do Almoxarifado junta os itens iguais da BOM (pedido do usuário em 06/11/2026)
 //

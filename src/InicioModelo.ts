@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 // TELA INÍCIO (09/11/2026, pedido do RH: um lugar para postar a imagem dos aniversariantes do mês). As regras da tela, sem tela nem banco, para ficarem testáveis.
 // Datas são sempre texto AAAA-MM-DD, nunca `new Date("AAAA-MM-DD")` (que é a meia-noite de Londres e mostra o dia anterior): a conta de dias é feita em UTC.

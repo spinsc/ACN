@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // Peças que os painéis de configuração do Admin dividem (12e83, 26/11/2026): ler as chaves de `configuracoes_sistema` sem tratar leitura recusada
 // como "tudo vazio" e traduzir o motivo de uma função de servidor que recusou.

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPLEMENTO DE REMESSA — E2 do envio parcial com kit incompleto (PLANO_ENVIO_PARCIAL_ITENS.md, pedido do usuário em 29/10/2026, OP A1562.2610)
 //

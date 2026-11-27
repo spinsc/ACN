@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Peças de tela para arquivo do bucket privado (Etapa 17, onda 5b e fatias do plano do bucket privado, 26/11/2026). A regra e o endereço assinado estão em ArquivoPrivado.ts.
 import React from 'react';
 import { useUrlDoArquivo, abrirArquivo } from './ArquivoPrivado';

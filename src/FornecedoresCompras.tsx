@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Aba "Fornecedores" do Compras e a janela de cadastro (pedido do usuário em 16/11/2026; regras em ComprasFornecedores.ts): o fornecedor de uma cotação tem de estar cadastrado aqui.
 // A janela de cadastro também abre pela própria cotação ("Cadastrar fornecedor"), para o comprador não perder o que já preencheu.
 import React, { useEffect, useMemo, useState } from 'react';

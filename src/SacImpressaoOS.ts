@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // SAC — a impressão da OS (A4, com a assinatura do cliente no pé). Saiu de dentro do SacTab em 05/11/2026 para a janela da Viagem também poder imprimir a OS que o técnico leva
 // (pedido do usuário: a OS de atendimento externo vai impressa, o técnico preenche e o cliente assina). O texto da folha é o mesmo de antes; o que mudou:

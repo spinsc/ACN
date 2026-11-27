@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Gravação dos avisos do sistema (publicar, editar, desativar/reativar e excluir), a MESMA no painel do Admin e no quadro flutuante 📌 (12e93, 27/11/2026).
+// Gravação dos avisos do sistema (publicar, editar, desativar/reativar e excluir), a MESMA no painel do Admin e no quadro flutuante 📌 (12e92b, 27/11/2026).
 // Saiu do AdminPainelAvisos (12e92) para o quadro flutuante não ficar com a cópia antiga, que dava por feita uma gravação que o banco negou. Cada função confere a
 // permissão, pergunta o que precisa perguntar, grava pedindo a linha de volta e DIZ o resultado (aviso verde ou vermelho em português); quem chama só decide o que
 // fazer com o formulário. Regras e frases: AvisosRegras.ts. Permissão (só Admin publica; editar, desativar e excluir só o autor ou DEV): utils/permissoes.ts.

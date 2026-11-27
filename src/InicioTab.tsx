@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 // TELA INÍCIO (09/11/2026, pedido do RH: um lugar para postar a imagem dos aniversariantes do mês). É a tela em que o sistema abre; o Dashboard geral continua no menu (grupo Dashboard).
 // Decidido com o usuário: quem posta é quem tem a marca "Pode postar na tela Início" no cadastro de usuários (e o Admin); o tempo é o de Palhoça/SC; a tela foi feita completa de uma vez.

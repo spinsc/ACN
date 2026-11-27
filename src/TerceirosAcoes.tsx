@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Serviços de terceiros: o que se faz com um serviço (ou com os carros de um grupo) além de pedir: agendar, dar como realizado, voltar e cancelar (fatia T2 do PLANO_SERVICOS_TERCEIROS.md, 22/11/2026).
 // Aqui estão o menu "⋯" dos cartões, a pergunta do motivo e as duas janelas que pedem dados: Agendar (prestador, dia e período, com o aviso vermelho de choque de data) e Dar como realizado
 // (dia, valor final e quem conferiu). Quem grava é o banco, pelas funções `terceiros_*` (TerceirosServicos.ts); as regras de quem pode o quê estão em TerceirosFluxo.ts.

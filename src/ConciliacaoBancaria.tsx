@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // ConciliacaoBancaria — extrato do banco x o que o sistema registrou
 //

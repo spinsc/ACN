@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // OP QUE É SÓ SERVIÇO DE TERCEIRO — abrir os serviços da OP (pedido do usuário em 25/11/2026)
 //

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // TROCAR O FLUXO DE UMA UNIDADE DEPOIS DE CRIADA (fluxo misto, etapa M3 — pedido do usuário em 27/10/2026; PLANO_FLUXO_MISTO.md)
 //

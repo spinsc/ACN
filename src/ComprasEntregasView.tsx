@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // ENTREGA POR FORNECEDOR — as peças de tela (pedido do usuário em 17/11/2026; as regras estão em ComprasEntregas.ts).
 //  • PrevisaoDoPedido: a data (ou uma data por fornecedor) no cartão e na linha do Compras;

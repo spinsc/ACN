@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // Avisos — painel próprio (botão "Avisos" no topo): "Datas para cuidar" (avisos de data do calendário, 17/11/2026) e o andamento das OPs.
 //

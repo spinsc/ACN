@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // Admin › os quatro painéis de configuração pequenos: Config. Email, Config. Cotações, Faixas de Markup e Config. NFC.
 //

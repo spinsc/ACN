@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // VIAGENS — a janela da reserva do veículo para uso interno (04/11/2026). As regras estão em ViagemReservas.ts.
 // É a mesma janela nos dois lugares em que se reserva: o botão "Reservar veículo" da Agenda (aba Viagens) e o quadro "Veículo" de uma demanda geral (`demanda` = a demanda).

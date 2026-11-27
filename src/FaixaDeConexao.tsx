@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Faixa de conexão (plano de migração para o servidor interno, B4, 26/11/2026): "sem internet" e "o sistema não está respondendo" em vermelho
 // (todo alerta novo é vermelho, regra de 27/10/2026) e "a conexão voltou" em verde, que some sozinho. As regras estão em Conexao.ts.
 // Fica entre o cabeçalho e a tela (DashboardTab) e no alto do cartão da entrada (LoginTab): não cobre o menu nem os botões da tela.

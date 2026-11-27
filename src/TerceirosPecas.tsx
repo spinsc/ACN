@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Serviços de terceiros: as peças pequenas que o Quadro, a Lista e as janelas repartem (fatia T2 do PLANO_SERVICOS_TERCEIROS.md, 22/11/2026): data por extenso, selos e o texto do dia de cada situação.
 // Datas só de DIA (AAAA-MM-DD) saem de texto, nunca de `new Date(texto)` (a meia-noite de Londres é o dia anterior no Brasil); instantes (criado_em, historico[].em) usam o relógio da pessoa.
 import React from 'react';

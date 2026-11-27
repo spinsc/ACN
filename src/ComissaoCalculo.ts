@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // CONTA DA COMISSÃO DOS TÉCNICOS — Produção, Serralheria e Adaptação (compartilhada)
 //

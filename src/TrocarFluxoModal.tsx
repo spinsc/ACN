@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // TrocarFluxoModal — "Trocar o fluxo desta unidade" (fluxo misto, etapa M3, pedido do usuário em 27/10/2026)
 //
