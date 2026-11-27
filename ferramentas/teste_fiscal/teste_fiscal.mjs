@@ -530,4 +530,129 @@ t('ORIGENS_DE_NOTA: ids únicos, toda linha diz a base e o que o sistema sabe; o
   }
 });
 
+// ── motor das regras fiscais versionadas (27/11/2026, src/FiscalMotor.ts): regras INVENTADAS, nenhuma regra fiscal real mora no repositório ──
+const M = await import(pathToFileURL(RAIZ + '/FiscalMotor.ts').href);
+const rg = (rotulo, cond = {}, res = {}) => ({ id: rotulo, rotulo, emitente: null, tipo_operacao: null, destino: null, tipo_orgao: null, indicador_ie: null, ncm_prefixo: null, origem_fiscal: null, monofasico: null,
+  cfop: '5102', cst_csosn: '00', aliquota_icms_pct: null, cbenef: null, informacao_complementar: null, exige_nota_referenciada: false, confirmada: true, fonte: 'teste', ...cond, ...res });
+const GERAL = rg('Geral', {}, { cfop: '5000' });
+const INTERNA = rg('Interna', { destino: 'dentro_uf' }, { cfop: '5102' });
+const INTERESTADUAL = rg('Interestadual', { destino: 'fora_uf' }, { cfop: '6102' });
+const INTERNA_NCM = rg('Interna NCM 8512', { destino: 'dentro_uf', ncm_prefixo: '8512' }, { cfop: '5101' });
+
+t('compativeis / refina / maisEspecifica: "qualquer" é compatível com tudo, a regra com mais condições refina a de menos e NCM é por prefixo', () => {
+  assert.ok(M.compativeis(GERAL, INTERNA)); assert.ok(M.compativeis(INTERNA, INTERNA_NCM));
+  assert.ok(!M.compativeis(INTERNA, INTERESTADUAL));
+  assert.ok(M.refina(INTERNA_NCM, INTERNA)); assert.ok(!M.refina(INTERNA, INTERNA_NCM));
+  assert.ok(M.maisEspecifica(INTERNA_NCM, INTERNA)); assert.ok(!M.maisEspecifica(INTERNA, INTERNA_NCM)); assert.ok(!M.maisEspecifica(INTERNA, INTERNA));
+  assert.ok(M.compativeis(rg('a', { ncm_prefixo: '8512' }), rg('b', { ncm_prefixo: '851220' })));
+  assert.ok(!M.compativeis(rg('a', { ncm_prefixo: '8512' }), rg('b', { ncm_prefixo: '8517' })));
+  assert.ok(M.refina(rg('a', { ncm_prefixo: '851220' }), rg('b', { ncm_prefixo: '8512' })));
+  assert.ok(!M.refina(rg('a', { ncm_prefixo: '8512' }), rg('b', { ncm_prefixo: '851220' })));
+  assert.ok(M.refina(rg('a', { origem_fiscal: 0 }), rg('b', { origem_fiscal: 0 })));   // 0 é uma origem (nacional), não "vazio"
+  assert.ok(!M.compativeis(rg('a', { monofasico: true }), rg('b', { monofasico: false })));
+  assert.equal(M.especificidade(INTERNA_NCM), 2);
+});
+t('conflitosDaVersao: duas regras que valem juntas, sem uma mais específica e com resultados diferentes são conflito; resultado igual ou uma contida na outra não', () => {
+  const A = rg('A', { emitente: 'ACN', destino: 'dentro_uf' }, { cfop: '5102' }), B = rg('B', { ncm_prefixo: '8512', destino: 'dentro_uf' }, { cfop: '5101' });
+  assert.equal(M.conflitosDaVersao([A, B]).length, 1);
+  assert.equal(M.conflitosDaVersao([A, { ...B, cfop: '5102' }]).length, 0);            // mesmo resultado: não faz mal
+  assert.equal(M.conflitosDaVersao([GERAL, INTERNA, INTERNA_NCM]).length, 0);           // cada uma contida na seguinte
+  assert.equal(M.conflitosDaVersao([INTERNA, INTERESTADUAL]).length, 0);                // nunca valem juntas
+  assert.equal(M.conflitosDaVersao([rg('A', { destino: 'dentro_uf' }, { aliquota_icms_pct: 12 }), rg('B', { destino: 'dentro_uf', tipo_orgao: 'municipal' }, { aliquota_icms_pct: 17 }), rg('C', { destino: 'dentro_uf', ncm_prefixo: '85' }, { aliquota_icms_pct: 7 })]).length, 1);   // B e C se pisam; A contém as duas
+});
+t('escolherRegra: acha a regra, a mais específica ganha e o resultado vem junto', () => {
+  const regras = [GERAL, INTERNA, INTERESTADUAL, INTERNA_NCM];
+  let e = M.escolherRegra({ destino: 'dentro_uf', ncm: '85122011' }, regras);
+  assert.equal(e.situacao, 'achou'); assert.equal(e.regra.rotulo, 'Interna NCM 8512'); assert.equal(e.confirmada, true);
+  e = M.escolherRegra({ destino: 'dentro_uf', ncm: '85258929' }, regras);
+  assert.equal(e.situacao, 'achou'); assert.equal(e.regra.rotulo, 'Interna');
+  e = M.escolherRegra({ destino: 'fora_uf', ncm: '85122011' }, regras);
+  assert.equal(e.regra.rotulo, 'Interestadual');
+  e = M.escolherRegra({ destino: 'exterior', ncm: '85122011' }, regras);
+  assert.equal(e.regra.rotulo, 'Geral');
+});
+t('escolherRegra: sem regra é resposta (nunca um valor inventado) e versão vazia também', () => {
+  let e = M.escolherRegra({ destino: 'exterior' }, [INTERNA, INTERESTADUAL]);
+  assert.equal(e.situacao, 'sem_regra'); assert.equal(e.regra, null); assert.match(e.porque, /contabilidade ainda não disse/);
+  e = M.escolherRegra({ destino: 'dentro_uf' }, []);
+  assert.equal(e.situacao, 'sem_regra'); assert.match(e.porque, /não tem regra nenhuma/);
+});
+t('escolherRegra: dado que falta e poderia mudar a resposta vira "faltam dados" (nos dois casos: nenhuma serve ainda, ou uma mais específica poderia valer)', () => {
+  let e = M.escolherRegra({}, [INTERNA, INTERESTADUAL]);
+  assert.equal(e.situacao, 'faltam_dados'); assert.deepEqual(e.faltam, ['destino']);
+  e = M.escolherRegra({ destino: 'dentro_uf' }, [INTERNA, INTERNA_NCM]);                   // sem NCM não dá para dizer se vale a mais específica
+  assert.equal(e.situacao, 'faltam_dados'); assert.equal(e.regra.rotulo, 'Interna'); assert.deepEqual(e.faltam, ['ncm_prefixo']);
+  e = M.escolherRegra({ destino: 'dentro_uf', ncm: '85' }, [INTERNA, INTERNA_NCM]);        // NCM curto demais para decidir
+  assert.equal(e.situacao, 'faltam_dados');
+  e = M.escolherRegra({ destino: 'dentro_uf', ncm: '8517' }, [INTERNA, INTERNA_NCM]);      // NCM que a mais específica descarta: a geral basta
+  assert.equal(e.situacao, 'achou'); assert.equal(e.regra.rotulo, 'Interna');
+});
+t('escolherRegra: conflito é resposta (e regras sobrepostas com o MESMO resultado não são conflito)', () => {
+  const A = rg('A', { emitente: 'ACN' }, { cfop: '5102' }), B = rg('B', { ncm_prefixo: '8512' }, { cfop: '5101' });
+  let e = M.escolherRegra({ emitente: 'ACN', ncm: '85122011' }, [A, B]);
+  assert.equal(e.situacao, 'conflito'); assert.equal(e.regra, null); assert.equal(e.candidatas.length, 2);
+  e = M.escolherRegra({ emitente: 'ACN', ncm: '85122011' }, [A, { ...B, cfop: '5102' }]);
+  assert.equal(e.situacao, 'achou');
+  e = M.escolherRegra({ emitente: 'DETECH', ncm: '85122011' }, [A, B]);                    // só a B serve
+  assert.equal(e.regra.rotulo, 'B');
+});
+t('escolherRegra: regra não confirmada é achada, mas marcada: não vale para emitir', () => {
+  const e = M.escolherRegra({ destino: 'dentro_uf' }, [{ ...INTERNA, confirmada: false, fonte: '' }]);
+  assert.equal(e.situacao, 'achou'); assert.equal(e.confirmada, false); assert.match(e.porque, /NÃO vale para emitir/);
+});
+t('escolherRegra: monofásico, origem 0 e NCM com pontuação são lidos do contexto sem erro', () => {
+  const regras = [rg('Mono', { monofasico: true }, { cst_csosn: '04' }), rg('Nacional', { origem_fiscal: 0, monofasico: false }, { cst_csosn: '00' })];
+  assert.equal(M.escolherRegra({ monofasico: true }, regras).regra.rotulo, 'Mono');
+  assert.equal(M.escolherRegra({ monofasico: 'nao', origem_fiscal: 0 }, regras).regra.rotulo, 'Nacional');
+  assert.equal(M.escolherRegra({ monofasico: false, origem_fiscal: '0' }, regras).regra.rotulo, 'Nacional');
+  assert.equal(M.escolherRegra({ ncm: '8512.20.11' }, [rg('N', { ncm_prefixo: '8512' })]).situacao, 'achou');
+});
+t('problemasParaAprovar: versão vazia, regra a confirmar, sem fonte, mesmas condições e conflito barram; versão em ordem não tem problema', () => {
+  assert.deepEqual(M.problemasParaAprovar([INTERNA, INTERESTADUAL]), []);
+  assert.match(M.problemasParaAprovar([])[0], /nenhuma regra/);
+  assert.match(M.problemasParaAprovar([{ ...INTERNA, confirmada: false }]).join('|'), /a confirmar com a contabilidade/);
+  assert.match(M.problemasParaAprovar([{ ...INTERNA, fonte: '  ' }]).join('|'), /sem dizer a fonte/);
+  assert.match(M.problemasParaAprovar([INTERNA, { ...INTERNA, rotulo: 'Repetida' }]).join('|'), /mesmas condições/);
+  assert.match(M.problemasParaAprovar([rg('A', { emitente: 'ACN' }, { cfop: '5102' }), rg('B', { ncm_prefixo: '8512' }, { cfop: '5101' })]).join('|'), /nenhuma é mais específica/);
+});
+t('erroDaRegra / regraParaGravar: exige nome, CFOP de 4 números, CST/CSOSN, alíquota válida, cBenef de 8 a 10 e fonte quando confirmada; grava só dígitos e vazio vira nulo', () => {
+  const ok = { ...M.FORM_DA_REGRA_VAZIO, rotulo: 'Venda interna', cfop: '5102', cst_csosn: '00' };
+  assert.equal(M.erroDaRegra(ok), null);
+  assert.match(M.erroDaRegra({ ...ok, rotulo: 'ab' }), /nome/);
+  assert.match(M.erroDaRegra({ ...ok, cfop: '51' }), /CFOP/);
+  assert.match(M.erroDaRegra({ ...ok, cst_csosn: '' }), /CST/);
+  assert.match(M.erroDaRegra({ ...ok, aliquota_icms_pct: '130' }), /alíquota/);
+  assert.match(M.erroDaRegra({ ...ok, aliquota_icms_pct: 'abc' }), /alíquota/);
+  assert.equal(M.erroDaRegra({ ...ok, aliquota_icms_pct: '12,5' }), null);
+  assert.match(M.erroDaRegra({ ...ok, cbenef: 'SC81' }), /cBenef/);
+  assert.equal(M.erroDaRegra({ ...ok, cbenef: 'SC810010' }), null);
+  assert.match(M.erroDaRegra({ ...ok, confirmada: true, fonte: '' }), /fonte/);
+  assert.equal(M.erroDaRegra({ ...ok, confirmada: true, fonte: 'e-mail de 27/11' }), null);
+  assert.match(M.erroDaRegra({ ...ok, ncm_prefixo: '8' }), /NCM/);
+  const g = M.regraParaGravar({ ...ok, ncm_prefixo: '8512.2', aliquota_icms_pct: '12,5', cbenef: 'sc810010', origem_fiscal: '0', monofasico: 'nao', destino: 'dentro_uf' }, 'V');
+  assert.equal(g.versao_id, 'V'); assert.equal(g.ncm_prefixo, '85122'); assert.equal(g.aliquota_icms_pct, 12.5); assert.equal(g.cbenef, 'SC810010');
+  assert.equal(g.origem_fiscal, 0); assert.equal(g.monofasico, false); assert.equal(g.emitente, null); assert.equal(g.tipo_operacao, null); assert.equal(g.confirmada, false);
+  assert.equal(M.regraParaGravar(ok, 'V').monofasico, null); assert.equal(M.regraParaGravar(ok, 'V').origem_fiscal, null);
+});
+t('formDaRegra: a regra gravada volta ao formulário sem perder o que é 0, falso ou vírgula', () => {
+  const linha = rg('X', { origem_fiscal: 0, monofasico: false, destino: 'fora_uf' }, { aliquota_icms_pct: '12.50' });
+  const f = M.formDaRegra(linha);
+  assert.equal(f.origem_fiscal, '0'); assert.equal(f.monofasico, 'nao'); assert.equal(f.aliquota_icms_pct, '12,50'); assert.equal(f.destino, 'fora_uf');
+  assert.deepEqual(M.formDaRegra(null), M.FORM_DA_REGRA_VAZIO);
+});
+t('compararVersoes: nova, tirada e mudou (campo a campo), casando pelas condições e não pelo nome', () => {
+  const antes = [INTERNA, INTERESTADUAL, rg('Só antes', { destino: 'exterior' })];
+  const agora = [{ ...INTERNA, rotulo: 'Interna (renomeada)', cfop: '5101' }, INTERESTADUAL, rg('Nova', { tipo_orgao: 'municipal' })];
+  const m = M.compararVersoes(antes, agora);
+  assert.equal(m.length, 3);
+  const mudou = m.find(x => x.tipo === 'mudou'); assert.deepEqual(mudou.campos.sort(), ['CFOP', 'nome']);
+  assert.equal(m.find(x => x.tipo === 'nova').regra.rotulo, 'Nova'); assert.equal(m.find(x => x.tipo === 'tirada').regra.rotulo, 'Só antes');
+  assert.deepEqual(M.compararVersoes(antes, antes), []);
+});
+t('resumoDasCondicoes: diz só o que a regra restringe', () => {
+  assert.deepEqual(M.resumoDasCondicoes(GERAL), []);
+  const r = M.resumoDasCondicoes(rg('x', { emitente: 'ACN', destino: 'fora_uf', ncm_prefixo: '8512', origem_fiscal: 0, monofasico: false }), id => 'OP ' + id);
+  assert.ok(r.includes('Empresa ACN') && r.includes('NCM 8512…') && r.includes('Origem 0') && r.includes('Não monofásico') && r.some(x => /interestadual/.test(x)), r.join('|'));
+});
+
 console.log(`${ok} conferências passaram${process.exitCode ? ', COM FALHAS (veja acima)' : ''}.`);
