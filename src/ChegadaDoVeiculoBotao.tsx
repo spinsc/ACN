@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // BOTÃO "VEÍCULO CHEGOU À MATRIZ" na janela da OP (pedido do usuário em 24/11/2026)
 //

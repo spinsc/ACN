@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // ATENDIMENTO EM GARANTIA — a tela do relatório semanal (G6 do PLANO_GARANTIA.md, 20/10/2026)
 // Dentro da aba Garantia do SAC, para a gerência e o Admin (decisão do usuário). Mostra e baixa em PDF o mesmo modelo de GarantiaRelatorio.ts.

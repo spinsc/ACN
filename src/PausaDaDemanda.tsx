@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useEffect, useState } from 'react';
 import { Faixa } from './Interface';
 import { confirmar } from './Feedback';

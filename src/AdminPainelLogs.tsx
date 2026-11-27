@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // Painel "Logs do Sistema" do Admin — o log de movimentações das OPs (12e84, 26/11/2026). Saiu do AdminTab.tsx já no padrão do design system (`Botao`, `Faixa`, `Tag`,
 // classes `acn-log-*` do design.css, sem `style` solto).

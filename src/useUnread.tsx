@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * useUnread — rastrea quais registros têm atualizações não lidas pelo usuário atual.
  *

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // CAMPO DE DINHEIRO — o único campo para qualquer valor em reais do sistema (pedido do usuário em 24/11/2026). Regras e o porquê em Moeda.ts.
 //

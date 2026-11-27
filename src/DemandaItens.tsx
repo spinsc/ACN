@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // DemandaItens — lista de itens e vínculos múltiplos da demanda avulsa
 //

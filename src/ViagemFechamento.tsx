@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // VIAGENS — o fechamento: custo real × orçado (pedido do usuário em 04/11/2026, fatia 3)
 //

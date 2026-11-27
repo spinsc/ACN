@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // RichTextInput — campo de texto com formatação (negrito/sublinhado/tachado/
 // cor) via toolbar CONTEXTUAL: só aparece depois que o usuário seleciona um

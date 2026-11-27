@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // LIGAÇÃO GARANTIA ↔ DESENVOLVIMENTO — as duas caixas de tela (pedido do usuário em 22/10/2026). As regras estão em GarantiaDesenvolvimento.ts.
 //   • ProjetoDeOrigem: dentro da ficha de garantia — o projeto do Desenvolvimento ligado ao veículo (o que a Engenharia deixou "Para a Garantia", a revisão e as lições) e o botão

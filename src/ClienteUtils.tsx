@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Botao, Chips, Selo, Faixa } from './Interface';

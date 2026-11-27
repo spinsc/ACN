@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // DESENVOLVIMENTO — painel de atenção (D6 do PLANO_DESENVOLVIMENTO_ENGENHARIA.md, 19/10/2026)
 //

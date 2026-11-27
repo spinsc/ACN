@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIGURAR A OP NO PCP — estrutura do veículo, perguntas do carro e BOM
 //

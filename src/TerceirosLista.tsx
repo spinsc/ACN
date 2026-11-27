@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Serviços de terceiros: a LISTA (fatia T2 do PLANO_SERVICOS_TERCEIROS.md, 22/11/2026): uma linha por serviço (por carro), com os mesmos filtros e passos do Quadro, para quem prefere tabela
 // ou precisa ordenar e somar. A tabela larga vai dentro de `acn-rolagem` e a coluna "Ações" fica fixa à direita (automática, `ColunaAcoesFixa.ts`).
 import React, { useMemo, useState } from 'react';

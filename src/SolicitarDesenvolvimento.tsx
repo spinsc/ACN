@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // SOLICITAR DESENVOLVIMENTO À ENGENHARIA — pedido do PCP, item por item (Etapa 18c, 13/10/2026)
 //

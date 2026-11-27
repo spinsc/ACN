@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // CAMPO DE CEP — o mesmo comportamento em todo formulário que pede CEP (R17, 13/10/2026; regra da embalagem, Etapa 7.13)
 //

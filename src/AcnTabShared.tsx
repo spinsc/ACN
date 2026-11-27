@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { nomeDoPedido } from './NomeDoPedido';
 import { formatarDocumento } from './ClienteDocumentoOp';   // 27/11/2026
 import { lerEntregasDosPedidos, temEntrega, chegadaDoPedido } from './ComprasEntregas';

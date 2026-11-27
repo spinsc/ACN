@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Edição de uma "atualização" (andamento) dos cards de Comercial e de Licitações.
 // Pedido do usuário em 07/10/2026; regra decidida com ele: só o AUTOR da atualização e quem tem a marca DEV editam (utils/permissoes.ts, podeEditarAtualizacao).
 // A edição não apaga a data de criação: grava editado_em/editado_por e a tela mostra a marca discreta "editada" (o mouse em cima diz quem e quando).

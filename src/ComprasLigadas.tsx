@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPRAS LIGADAS A UMA OS OU A UMA OP — pedido do usuário em 26/10/2026:
 // "o SAC precisa gerar uma ordem de compra de uma OS ou OP gerada no SAC e vincular essa compra à OS".

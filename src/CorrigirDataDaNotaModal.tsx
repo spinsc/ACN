@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // CorrigirDataDaNotaModal — "Corrigir a data de uma nota emitida" (Fiscal, pedido do usuário em 27/10/2026)
 //

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Serviços de terceiros: o QUADRO (fatia T2 do PLANO_SERVICOS_TERCEIROS.md, 22/11/2026): três colunas, A definir, Agendado e Realizado, com o cancelado fora (só no filtro "Cancelados").
 // "No prestador", atrasado, choque de data e sem data são selos no cartão, não colunas. Um serviço por carro, e a tela junta num cartão só os carros da mesma venda, tipo, situação, prestador e dia
 // (clicar no cartão do grupo abre a lista dos carros). Arrastar o cartão para outra coluna faz o mesmo que o menu "⋯": o passo que leva até lá, ou o porquê de não poder.

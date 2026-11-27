@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Serviços de terceiros, fatia T5 (23/11/2026): a ligação do serviço com a saída da Vistoria de pátio (PLANO_SERVICOS_TERCEIROS.md).
 // Decidido com o usuário em 23/11/2026: da janela do serviço dá para "Registrar a saída" (leva à Vistoria já preenchida e, ao salvar, a saída fica ligada ao serviço) e para
 // "Ligar a uma saída que já existe" (esta janela). Com a saída ligada o serviço mostra "No prestador desde 23/11" e, depois do retorno, "Voltou em 28/11".

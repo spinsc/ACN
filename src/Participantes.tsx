@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Participantes de um compromisso, tarefa ou agendamento — as pessoas "envolvidas ou cientes", que passam a ver o item na agenda e no calendário delas.
 // Pedido do usuário em 07/10/2026 (e decidido com ele): vale para os compromissos da Agenda (todos os setores), as tarefas do Financeiro, as tarefas da Engenharia, os agendamentos de
 // manutenção e o próximo contato dos cards do Comercial; quem é adicionado recebe uma notificação (a mesma caixa das @menções). O dono do item continua sendo quem o criou e é o único

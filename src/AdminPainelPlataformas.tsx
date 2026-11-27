@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // Painel "Plataformas" do Admin — as plataformas de licitação (NEO, QFrotas, Prime…) com o desconto e a retenção que a Formação de Preços aplica sozinha
 // quando a plataforma é escolhida (12e93, 27/11/2026). Saiu do AdminTab.tsx já no padrão do design system (`Botao`, `Faixa`, `Selo`, `confirmar`,

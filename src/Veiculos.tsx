@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // VEÍCULOS — o catálogo da casa, alimentado pela Tabela FIPE
 //

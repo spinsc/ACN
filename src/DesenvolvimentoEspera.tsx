@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // DESENVOLVIMENTO — a caixa "Material do desenvolvimento" (pedido do usuário em 28/10/2026)
 //

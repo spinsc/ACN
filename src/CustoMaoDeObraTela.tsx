@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // Relatório "Custo da mão de obra" (aba Relatórios) — horas instaladas e custo da hora por departamento, CLT e terceiros em quadros separados.
 // Pedido do diretor, levado pelo usuário em 13/11/2026. As regras (jornada de 8h48, feriados, encargos, departamento) estão em CustoMaoDeObra.ts.

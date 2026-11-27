@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // EQUIPE DA OP — quem trabalhou na adaptação e na serralheria (30/09/2026)
 //

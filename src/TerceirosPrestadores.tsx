@@ -1,4 +1,3 @@
-// @ts-nocheck
 // A aba "Prestadores" dos Serviços de terceiros e a janela de cadastro (fatia T1 do PLANO_SERVICOS_TERCEIROS.md, 22/11/2026; as regras estão em TerceirosModelo.ts).
 // Mesmo desenho do cadastro de fornecedores do Compras (lista, busca, situação, cadastrar, editar, desativar e reativar), com uma diferença: o prestador marca QUE serviços faz.
 // Na janela de pedir (fatia T2) só aparecem os prestadores que fazem o tipo escolhido; quem não marcou nenhum aparece para qualquer tipo.

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // ATENDIMENTO EM GARANTIA — avaliação técnica, fornecedor, quem executa e pedido de peça (G2 do PLANO_GARANTIA.md, 19/10/2026)
 //

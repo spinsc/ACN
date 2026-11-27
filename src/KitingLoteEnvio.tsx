@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // KitingLoteEnvio — kiting 100% do lote inteiro de Venda para Envio
 //

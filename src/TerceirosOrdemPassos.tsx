@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Serviços de terceiros: as janelas que PEDEM DADOS para andar com a ordem de serviço em lote (fatia T4 do PLANO_SERVICOS_TERCEIROS.md, 23/11/2026):
 //  • Montar a ordem (prestador, dia do envio das peças e previsão de retorno, valem para todos os serviços);
 //  • Enviar as peças (a cópia assinada pelo prestador é obrigatória; sem ela a ordem fica "Aguardando assinatura");

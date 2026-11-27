@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // ONDE ESTÁ AGORA — a resposta de relance sobre uma OP.
 //

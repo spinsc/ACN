@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // ExcluirFormacaoModal — "Excluir formação de preços" (pedido do usuário em 17/11/2026)
 //

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // O ponto do dia ao lado de um pedido de hora extra (P3, 25/11/2026): só leitura, só para quem pode ver o ponto de todos (RH, Admin e gerentes).
 // As regras estão em PontoHoraExtra.ts. A peça lê uma vez a ficha do RH da pessoa e a linha do dia em `ponto_dias`; leitura recusada diz isso e nunca vale como "sem ponto".
 import React, { useEffect, useState } from 'react';

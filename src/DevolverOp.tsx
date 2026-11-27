@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // DevolverOp — devolução de OP com escolha do destino
 //

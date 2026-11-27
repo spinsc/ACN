@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // TERMÔMETRO DE MARKUP — item 5/5 do levantamento do dono da empresa
 //

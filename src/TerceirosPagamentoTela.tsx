@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Serviços de terceiros, fatia T5 (23/11/2026): a janela "Pedir pagamento" e a caixa que diz como está o pagamento do serviço (PLANO_SERVICOS_TERCEIROS.md).
 // Decidido com o usuário em 23/11/2026: UM pedido por visita ou ordem. A janela abre já preenchida com o prestador (favorecido e CNPJ ou CPF); quem pede completa o vencimento e os dados para pagar.
 // O valor NÃO é digitado aqui: o banco soma o valor final dos serviços (TerceirosPagamento.ts), então a tela e o Financeiro nunca divergem. Quem não vê valores também pede (não vê o total).

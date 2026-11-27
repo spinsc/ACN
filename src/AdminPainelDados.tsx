@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // Painel "Dados / Limpeza" do Admin — ver, deletar e limpar registros de 35 tabelas, sempre com a cópia na Lixeira por 24 horas (12e90, 27/11/2026). Saiu do AdminTab.tsx já no padrão
 // do design system (`Chips` para as tabelas, `Botao`, `Faixa`, `Selo`, `confirmar`, `mostrarAviso`, a tabela do guia, classes `acn-dados-*` do design.css, sem `style` solto). É o painel que mais

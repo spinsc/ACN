@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // Painel "Departamentos (Compras)" do Admin — o departamento de um pedido de compra e o gestor que o aprova (12e89, 27/11/2026). Saiu do AdminTab.tsx já no padrão do design system
 // (`Botao`, `Faixa`, `Selo`, `confirmar`, `mostrarAviso`, a barra de campos do guia, a tabela do guia, classes `acn-dep-*` do design.css, sem `style` solto).

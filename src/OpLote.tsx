@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // ABRIR O LOTE — a janela do lote inteiro, aberta do mesmo jeito que se abre uma OP (pedido do usuário em 16/10/2026).
 //

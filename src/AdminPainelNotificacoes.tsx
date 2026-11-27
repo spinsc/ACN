@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // Painel "Responsáveis por perfil" do Admin — quem responde por cada perfil sem ter esse perfil (12e88, 26/11/2026). Saiu do AdminTab.tsx já no padrão do design system (`Botao`,
 // `Faixa`, `Selo`, `confirmar`, `mostrarAviso`, a barra de filtros do guia, classes `acn-resp-*` do design.css, sem `style` solto).

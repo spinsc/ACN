@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useMemo, useState, useEffect } from 'react';
 import { anexarValoresDasOps } from './OpValores';
 import { Botao, Selo } from './Interface';

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React from 'react';
 
 const URL_REGEX = /(https?:\/\/[^\s<>"']+)/g;

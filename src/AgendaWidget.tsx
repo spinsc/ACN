@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { supabase } from './supabaseClient';

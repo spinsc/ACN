@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // Painel "Avisos" do Admin — os avisos do sistema que aparecem no 📌 de todo mundo (12e92, 27/11/2026). Saiu do AdminTab.tsx já no padrão do design system
 // (`Botao`, `Faixa`, `Selo`, `Chips`, `confirmar`, `mostrarAviso`, classes `acn-avsa-*` do design.css, sem `style` solto) e reaproveita os cartões `acn-avs-*`

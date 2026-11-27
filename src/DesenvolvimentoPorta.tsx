@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // DESENVOLVIMENTO — a tela do modelo com entregáveis e portas (D1 do PLANO_DESENVOLVIMENTO_ENGENHARIA.md, 19/10/2026)
 //

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // FormacoesExcluidas — a lista, só para leitura, das formações de preços excluídas com motivo (pedido do usuário em 17/11/2026).
 // Só Admin e gerentes veem (o banco confere: a função `formacoes_excluidas` devolve vazio para os outros). Serve para conferir quem excluiu, quando e por quê;

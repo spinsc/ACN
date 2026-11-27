@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // ProdutoArquivos — arquivos de projeto da estrutura de um produto (desenho,
 // esquema elétrico, DXF, PDF...). Ficam com o produto e aparecem em quem usa a

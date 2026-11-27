@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // DEMANDAS GERAIS — "esta demanda vai usar o veículo da frota" no formulário da Nova Demanda (04/11/2026). Pedido do usuário: quem abre a demanda geral e sabe que ela prende o carro
 // reserva o veículo na hora, com o motivo; a reserva nasce ligada à demanda criada e aparece na Agenda das Viagens (ViagemReservas.ts). Depois de criada, a demanda tem o quadro

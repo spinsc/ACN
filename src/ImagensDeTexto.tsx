@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Imagem colada dentro de um texto formatado (Área Livre das licitações, nota do CRM, Área Livre da cotação do Compras) no bucket PRIVADO
 // (plano do bucket privado, B4b, 26/11/2026).
 // Por que existe: nesses textos o endereço da imagem mora DENTRO do HTML que o editor grava (`<img src="https://…/acn-media/…">`). Um <img> não pode pedir o endereço

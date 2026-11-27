@@ -1,4 +1,3 @@
-// @ts-nocheck
 // A aba "Tipos de serviço" dos Serviços de terceiros e a janela de cadastro (fatia T1 do PLANO_SERVICOS_TERCEIROS.md, 22/11/2026; as regras estão em TerceirosModelo.ts).
 // Cada tipo carrega duas regras que o Admin muda sem mexer em código: QUEM MARCA A DATA (película, plotagem e pintura: a Adaptação; os outros: quem pediu) e ONDE costuma ser feito.
 // Só o Admin cadastra e corrige (o banco recusa os outros); os demais só leem. Nada se apaga: o tipo se desativa, porque os serviços já pedidos apontam para ele.

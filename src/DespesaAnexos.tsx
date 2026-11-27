@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // ANEXOS DA DESPESA DO CENTRO DE CUSTO (Etapa 15d do ux-fluxo, 05/10/2026)
 // O comprovante (NF, recibo, foto) fica no armazenamento acn-media, no mesmo desenho dos anexos das compras

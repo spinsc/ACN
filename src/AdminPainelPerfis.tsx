@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // Painel "Perfis de Acesso" do Admin — o modelo de telas e permissões de cada perfil (12e91, 27/11/2026). Saiu do AdminTab.tsx já no padrão do design system
 // (`Botao`, `Faixa`, `Selo`, `confirmar`, `mostrarAviso`, a janela do guia com cabeçalho, corpo e rodapé, a tabela do guia, classes `acn-perf-*` do design.css, sem `style` solto).

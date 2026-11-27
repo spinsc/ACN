@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Serviços de terceiros: a janela da ORDEM DE SERVIÇO em lote da pintura eletrostática (fatia T4 do PLANO_SERVICOS_TERCEIROS.md, 23/11/2026).
 // Mostra a ordem por inteiro (situação, prestador, datas, cópia assinada, os serviços e o histórico) e dá os passos de cada situação para quem pode mexer nela (Admin, gerentes e Adaptação):
 //   Aguardando assinatura → enviar as peças (com a cópia assinada), alterar, incluir ou tirar serviços, cancelar;  Peças no prestador → registrar o retorno, ajustar previsão e cópia.

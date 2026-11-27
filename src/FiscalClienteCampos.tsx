@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Os dados fiscais de UM cliente, dentro da ficha do cliente (preparação do módulo fiscal, 26/11/2026). Peça autônoma: lê e grava sozinha na tabela `fiscal_clientes`
 // (uma linha por cliente, criada só quando alguém responde), com o botão próprio "Salvar dados fiscais". A ficha do cliente em si não mudou: nenhuma coluna nova em `clientes`.
 // Sem os dados fiscais a nota não sai (a especificação do Fiscal pede indicador da inscrição, tipo de órgão e retenção de IR), por isso a peça mostra o que falta.

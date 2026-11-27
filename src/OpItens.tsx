@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // OpItens — o que foi vendido, o que o PCP planejou (a BOM; era da Engenharia até a Etapa 18, de 13/10/2026) e o que saiu no kit
 //

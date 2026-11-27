@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Campos pequenos das Viagens, em arquivo à parte para a tela e o provisionamento usarem os mesmos (04/11/2026).
 import React, { useState } from 'react';
 import { lerValorDigitado } from './LerValor';
