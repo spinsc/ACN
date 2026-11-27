@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from './supabaseClient';
 import { confirmar } from './Feedback';

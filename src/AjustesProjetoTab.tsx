@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter } from './AcnTabShared';

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // DesenvolvimentoPecasTab — sub-aba "Desenvolvimento" da Engenharia
 // Controle de peças em desenvolvimento por etapas (Concepção → Entrega).

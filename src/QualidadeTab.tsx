@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { supabase } from './supabaseClient';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
