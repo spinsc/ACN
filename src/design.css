@@ -7791,3 +7791,14 @@ input.acn-adm-cot-chave:disabled { opacity: .5; cursor: not-allowed; }
 .acn-adm-cot-desconto-ajuda { margin-bottom: 8px; font-size: 12px; color: var(--acn-text); }
 .acn-adm-cot-desconto-campo { display: flex; align-items: center; gap: 8px; }
 .acn-input.acn-adm-cot-desconto-input { width: 100px; min-width: 0; box-sizing: border-box; }
+
+/* ── 12e84 (26/11/2026): painel Logs do Sistema do Admin (AdminPainelLogs.tsx) ────────────────────────────────────────────────────────────────────────────────────
+   O setor deixa de ser pintado de uma cor por setor (o vermelho do CQ parecia alerta e vermelho é só para alerta): vira a etiqueta neutra do guia. */
+.acn-log .acn-log-limite { font-weight: 500; font-size: 12px; }
+html body .acn-log-filtros { margin: 0; }
+html body .acn-log-filtros .form-group { margin: 0; }
+.acn-log-filtros .form-group { flex: 1 1 200px; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); }
+.acn-log-filtros .form-group :is(select, input) { width: 100%; min-width: 0; box-sizing: border-box; }
+.acn-log-data { white-space: nowrap; }
+.acn-log-op { color: var(--acn-brand); }
+body.dark .acn-log-op { color: #7fd8cc; }
