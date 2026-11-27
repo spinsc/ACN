@@ -7862,3 +7862,23 @@ html body .modal-box.acn-modal-cadastro.acn-perf-jan { width: min(780px, 96vw); 
 .acn-perf-campos { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .acn-perf-campos .form-group { min-width: 0; }
 .acn-perf-campos .acn-input { width: 100%; min-width: 0; box-sizing: border-box; }
+
+/* ── 12e92 (27/11/2026): painel Avisos do Admin (AdminPainelAvisos) ──
+   O cartão de cada aviso é o do quadro flutuante (.acn-avs-item, mesma paleta por criticidade); aqui só o que é da tela de Admin: a grade formulário + lista,
+   o formulário em coluna e o aviso desativado ou vencido esmaecido. Campo dentro de grade: coluna minmax(0, 1fr) e controle com largura 100% (regra do CLAUDE.md). */
+.acn-avsa { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 16px; align-items: start; }
+.acn-avsa.so-lista { grid-template-columns: minmax(0, 1fr); }
+.acn-avsa-form { display: flex; flex-direction: column; gap: 10px; }
+.acn-avsa-form .form-group { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; min-width: 0; flex: 0 0 auto; }   /* flex: o responsivo.css dá 'flex: 1 1 140px' ao .form-group e, numa coluna, isso vira 140 px de ALTURA (medido no celular) */
+.acn-avsa-form .acn-input { width: 100%; min-width: 0; box-sizing: border-box; }
+.acn-avsa-form textarea.acn-input { resize: vertical; }
+.acn-avsa-par { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: end; }
+.acn-avsa-botoes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+.acn-avsa-lista { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.acn-avsa-itens { display: flex; flex-direction: column; gap: 8px; }
+.acn-avsa-item { border-radius: 6px; border-bottom: none; box-shadow: 0 1px 4px rgba(0, 0, 0, .06); }
+.acn-avsa-item.apagado { opacity: .65; }
+.acn-avsa-item .acn-avs-item-cab { flex-wrap: wrap; }
+.acn-avsa-item .acn-avs-tags { flex-wrap: wrap; align-items: center; }
+.acn-avsa-acoes { display: flex; justify-content: flex-end; gap: 4px; margin-top: 6px; }
+@media (max-width: 900px) { .acn-avsa { grid-template-columns: minmax(0, 1fr); } }
