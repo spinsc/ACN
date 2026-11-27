@@ -20,6 +20,9 @@ import FormacoesExcluidas from './FormacoesExcluidas';
 import { podeExcluirFormacao, lerFamiliaDaFormacao } from './ExclusaoDeFormacao';
 import Icone from './Icone';
 import { useAbaNoEndereco } from './AbaNoEndereco';
+import { useRegistroNoEndereco, lerPorCodigo, copiarLinkDoRegistroComAviso } from './RegistroNoEndereco';   // 26/11/2026 (Fase 6 do plano de endereços): o detalhe de uma formação em Preços Formados tem endereço próprio
+import { enderecoAtual, irParaEndereco } from './EnderecoDoNavegador';
+import { montarEnderecoDaAba, registroDaTelaNoEndereco } from './Rotas';
 import { numeroOuNulo } from './LerValor';
 import { CampoMoeda } from './CampoMoeda';
 import { mdiClose, mdiPlus, mdiPencilOutline, mdiTagOutline, mdiContentSaveOutline, mdiCogOutline, mdiFolderOpenOutline,
@@ -1175,7 +1178,7 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
 }
 
 // ─── ABA PREÇOS FORMADOS (Vendedores + Todos) ─────────────────────────────────
-function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar, abrirId = null, onAbriu = null }: any) {
+function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar, abrirRegistro = null, onAbriu = null, pedirFechar = 0, onDetalhe = null }: any) {
   const [cotacoes, setCotacoes]         = useState([]);
   const [carregando, setCarregando]     = useState(true);
   const [cotacaoAberta, setAberta]      = useState(null);
@@ -1221,14 +1224,17 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar, abrirId
     setPropostas(data || []);
   };
 
-  // Vínculo de demanda avulsa (16/10/2026): com a lista carregada, abre a formação pedida; se ela não existe mais, diz em vez de ficar na lista sem explicar.
+  // 26/11/2026 (Fase 6): o detalhe tem endereço próprio (`#/formacao-precos/preco/<código>`). Quem manda abrir é o gancho do componente de fora (que lê a formação pelo código, sem esperar a lista),
+  // quem manda fechar também (Voltar do navegador), e este componente avisa para fora qual detalhe está aberto, para o endereço acompanhar (o vínculo de demanda, o link colado e o F5 passam por aqui).
   useEffect(() => {
-    if (!abrirId || carregando) return;
+    if (!abrirRegistro) return;
     onAbriu?.();
-    if (erroLeitura) return;   // a faixa de erro da própria tela já explica
-    const m = cotacoes.find((c: any) => String(c.id) === String(abrirId));
-    if (m) abrirCotacao(m); else alert('Não encontrei esta formação de preços: ela pode ter sido excluída.');
-  }, [abrirId, carregando]);
+    abrirCotacao(abrirRegistro);
+  }, [abrirRegistro]);
+  const fecharVisto = useRef(pedirFechar);
+  useEffect(() => { if (pedirFechar !== fecharVisto.current) { fecharVisto.current = pedirFechar; setAberta(null); } }, [pedirFechar]);
+  useEffect(() => { onDetalhe?.(cotacaoAberta ? String(cotacaoAberta.id) : null); }, [cotacaoAberta?.id]);
+  useEffect(() => () => { onDetalhe?.(null); }, []);
 
   const salvarProposta = async () => {
     if (!cotacaoAberta || salvando || salvandoPropostaRef.current) return;   // 7.59: clique duplo gravava a proposta duas vezes (o estado `salvando` só muda no desenho seguinte; o ref vale na hora)
@@ -1285,6 +1291,8 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar, abrirId
               {maxDesc > 0 ? <span className="acn-fp-pf-max">Desc.máx: {maxDesc}%</span> : ''}
             </div>
           </div>
+          <Botao variante="discreto" pequeno icone={mdiLinkVariant} aria-label="Copiar o link desta formação" title="Copiar o link desta formação para colar numa mensagem ou e-mail"
+            onClick={() => copiarLinkDoRegistroComAviso('formacao_precos', 'preco', cotacaoAberta.id, 'da formação')} />
         </div>
 
         {/* Tabela de itens */}
@@ -1913,22 +1921,28 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   // 26/11/2026 (Fase 4 do plano de endereços): as duas abas têm endereço (#/formacao-precos/precos-formados); Formação é a padrão. Embutida no CRM ou numa licitação a tela não tem
   // barra de abas nem endereço próprio (`tela` vazia = o estado fica só local). Trocar de aba não descarta a formação em edição: ela fica guardada e só a tela sai da vista.
   const [abaAtiva, setAbaAtiva]             = useAbaNoEndereco({ tela: embutido ? '' : 'formacao_precos' }) as [string, (v: any) => void];
-  // Vínculo de uma demanda avulsa com uma formação de preço (16/10/2026): abrir o vínculo leva direto à formação, na aba "Preços Formados". Mesmo padrão dos outros
-  // atalhos (global + evento), porque esta tela pode montar depois do clique. Dentro de Licitações/CRM (embutido) a formação é do processo e não responde ao atalho.
-  const [abrirId, setAbrirId] = useState<string | null>(null);
-  useEffect(() => {
-    if (embutido) return;
-    const tentarAbrir = () => {
-      const pend = (window as any).__acnDeepLink;
-      if (!pend || pend.contexto !== 'formacao') return;
-      (window as any).__acnDeepLink = null;
-      setAbaAtiva('precos_formados');
-      setAbrirId(String(pend.contextoId));
-    };
-    tentarAbrir();
-    window.addEventListener('acn:abrir-registro', tentarAbrir);
-    return () => window.removeEventListener('acn:abrir-registro', tentarAbrir);
-  }, [embutido]);
+  // 26/11/2026 (plano de endereços e rotas, Fase 6; escolha do usuário: só o DETALHE de Preços Formados, o editor e o modo embutido ficam como estavam): o detalhe de uma formação tem endereço
+  // próprio, `#/formacao-precos/preco/<código>` (F5, Voltar, Avançar e link colado abrem o mesmo detalhe; o vínculo de uma demanda avulsa, de 16/10/2026, abre por ele). O estado do detalhe mora na lista
+  // (`AbaPrecoFormados`), então o gancho fica aqui, que sempre existe: ele lê a formação pelo código, manda a lista abrir (`abrirRegistro`) ou fechar (`pedirFechar`) e recebe de volta qual está aberto
+  // (`detalheId`). Dentro do CRM, das Licitações e do Telecom (`embutido`) a formação é do processo e não tem endereço próprio: a tela fica em branco para o gancho.
+  const [abrirRegistro, setAbrirRegistro] = useState<any>(null);
+  const [pedirFechar, setPedirFechar] = useState(0);
+  const [detalheId, setDetalheId] = useState<string | null>(null);
+  useRegistroNoEndereco({
+    tela: embutido ? '' : 'formacao_precos', tipo: 'preco', rotulo: 'a formação de preços',
+    aberto: embutido ? null : detalheId,
+    ler: (chave) => lerPorCodigo(supabase.from('cotacoes_precos').select('*').eq('id', chave).maybeSingle()),
+    mostrar: (c) => { setAbaAtiva('precos_formados'); setAbrirRegistro(c); },
+    fechar: () => { setAbrirRegistro(null); setPedirFechar(n => n + 1); },
+  });
+  // As abas de cima continuam à vista com o detalhe aberto: trocar de aba enquanto o endereço é o do detalhe troca o endereço do passo (sem passo novo) e o detalhe fecha; sem isso o Voltar
+  // do navegador iria desfazer a troca de aba. A aba troca ANTES de o endereço ser reescrito: com o endereço novo e a aba ainda a antiga, o gancho da aba "devolvia" a aba antiga à barra e a troca
+  // acabava criando um passo a mais no histórico (achado no cenário C116, 26/11/2026).
+  const trocarDeAba = (a: string) => {
+    const noDetalhe = registroDaTelaNoEndereco(enderecoAtual(), 'formacao_precos')?.tipo === 'preco';
+    setAbaAtiva(a);
+    if (noDetalhe) irParaEndereco(montarEnderecoDaAba('formacao_precos', [a]), { substituir: true });
+  };
   const [oplVinculada, setOplVinculada]     = useState(null);
   const [descontoMaximoPct, setDescontoMax] = useState(0);
   const [finalizando, setFinalizando]       = useState(false);
@@ -3340,7 +3354,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
 
       {/* ── NAVEGAÇÃO DE ABAS — some no modo embutido, só a edição importa ── */}
       {!embutido && (
-        <Abas ativa={abaAtiva} onChange={setAbaAtiva}
+        <Abas ativa={abaAtiva} onChange={trocarDeAba}
           itens={[
             { id: 'formacao', rotulo: 'Formação de Preços', icone: mdiChartBar },
             { id: 'precos_formados', rotulo: 'Preços Formados', icone: mdiFileMultipleOutline },
@@ -3349,7 +3363,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
 
       {/* ── ABA PREÇOS FORMADOS ── */}
       {!embutido && abaAtiva === 'precos_formados' && (
-        <AbaPrecoFormados currentUser={currentUser} isVendedor={isVendedor} onEditar={editarCotacao} onClonar={clonarCotacao} abrirId={abrirId} onAbriu={() => setAbrirId(null)} />
+        <AbaPrecoFormados currentUser={currentUser} isVendedor={isVendedor} onEditar={editarCotacao} onClonar={clonarCotacao} abrirRegistro={abrirRegistro} onAbriu={() => setAbrirRegistro(null)} pedirFechar={pedirFechar} onDetalhe={setDetalheId} />
       )}
 
       {/* ── ABA FORMAÇÃO DE PREÇOS ── */}
