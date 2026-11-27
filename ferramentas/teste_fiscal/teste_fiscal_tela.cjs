@@ -32,6 +32,37 @@ const simularArquivo = (url) => {
   if (/\/rest\/v1\/oples\?.*numero_nf/.test(url)) return ok([{ opl: 'A1679.2611', numero_nf: '1679', faturamento_empresa: 'Detech', data_emissao_nf: null }, { opl: 'A9.2611', numero_nf: '100', faturamento_empresa: 'ACN', data_emissao_nf: null }, { opl: 'A8.2611', numero_nf: '555', faturamento_empresa: 'ACN', data_emissao_nf: null }]);
   return null;
 };
+
+// ── a prontidão da OP (dados SIMULADOS; só vale com `modoProntidao` ligado, para não atrapalhar os outros cenários) ──
+let modoProntidao = false;
+let modoFiscalClientes = 'ok';
+const uid = (n) => `00000000-0000-4000-8000-0000000000${String(n).padStart(2, '0')}`;
+const opBase = (n, o) => ({ id: uid(n), status_geral: 'Aguarda Emissao NF', tipo_projeto: 'Adaptacao', quantidade: 1, cliente_nome: 'Prefeitura de Teste', faturamento_empresa: 'ACN', data_liberacao_comercial: '2026-11-20', fluxo_entrega: 'adaptacao', itens_vendidos: [{ nome: 'SINALIZADOR INTERLED2 VERMELHO', item_id: ITEM_ID, quantidade: 2 }], ...o });
+const ITEM_ID = '00000000-0000-4000-8000-0000000000aa';
+const OPS_PRONTIDAO = [
+  opBase(1, { opl: 'A100.2611' }),
+  opBase(2, { opl: 'A101.2611', cliente_nome: 'Cliente Sumido' }),
+  opBase(3, { opl: 'A102.2611/01' }),
+  opBase(4, { opl: 'A102.2611/02', cliente_nome: 'Cliente Sumido' }),
+  opBase(5, { opl: 'A200.2611', status_geral: 'Faturado e Disponivel para Entrega', numero_nf: '100', data_emissao_nf: '2026-11-20T12:00:00Z' }),
+  opBase(6, { opl: 'A201.2611', status_geral: 'Faturado e Disponivel para Entrega', numero_nf: '555', data_emissao_nf: '2026-11-20T12:00:00Z' }),
+];
+const simularProntidao = (url) => {
+  const ok = (body) => ({ status: 200, body });
+  if (/\/rest\/v1\/oples\?.*status_geral=in/.test(url)) return ok(OPS_PRONTIDAO);
+  if (/\/rest\/v1\/oples\?.*opl=like\.%\/%(&|$)/.test(url)) return ok(OPS_PRONTIDAO.filter(o => /\/\d+$/.test(o.opl)).map(o => ({ id: o.id, opl: o.opl, status_geral: o.status_geral, numero_nf: null, numero_nf_servico: null, fluxo_entrega: o.fluxo_entrega, tipo_projeto: o.tipo_projeto })));
+  if (/\/rest\/v1\/sac_ordens_servico\?/.test(url)) return ok([]);
+  if (/\/rest\/v1\/clientes\?.*select=id%2Cnome%2Cdocumento|\/rest\/v1\/clientes\?select=id,nome,documento/.test(url)) return ok([{ id: 'c1', nome: 'Prefeitura de Teste', documento: '11222333000181' }]);
+  if (/\/rest\/v1\/fiscal_clientes\?/.test(url)) return modoFiscalClientes === 'erro' ? { status: 500, body: { message: 'boom', code: 'XX000' } } : ok([{ cliente_id: 'c1', indicador_ie: 'isento', tipo_orgao: 'municipal', retem_ir: true, codigo_ibge: '4205407' }]);
+  if (/\/rest\/v1\/cadastro_itens\?/.test(url)) return /nome_norm=in/.test(url) ? ok([]) : ok([{ id: ITEM_ID, codigo: '225', nome: 'SINALIZADOR INTERLED2 VERMELHO', ncm: '85122011', ipi_pct: 0, ativo: true, categoria: 'MERCADORIA PARA REVENDA' }]);
+  if (/\/rest\/v1\/fiscal_itens\?/.test(url)) return ok([{ item_id: ITEM_ID, origem_fiscal: 0, monofasico: false, cest_nao_se_aplica: true }]);
+  if (/\/rest\/v1\/fiscal_emitentes\?/.test(url)) return ok([
+    { id: 'e1', codigo: 'ACN', razao_social: 'ACN SINAL VERDE LTDA', cnpj: ACN, inscricao_estadual: '255123456', crt: 3, inscricao_municipal: '123', cep: '88132000', logradouro: 'RUA A', numero: '1', bairro: 'CENTRO', cidade: 'PALHOCA', uf: 'SC', codigo_ibge: '4211900', serie_nfe: 3 },
+    { id: 'e2', codigo: 'DETECH', razao_social: 'DETECH', cnpj: DETECH, inscricao_estadual: null, crt: 1, serie_nfe: 1 },
+  ]);
+  return null;
+};
+
 let modoDaGravacao = 'ok';
 const respostaDaGravacao = (url) => /rpc\/fiscal_guardar/.test(url)
   ? (modoDaGravacao === 'ok' ? { status: 200, body: { novas: 1, atualizadas: 0, repetidas: 1, eventos_novos: 0, eventos_repetidos: 0, inutilizacoes_novas: 0, inutilizacoes_repetidas: 0 } } : { status: 400, body: { message: 'canceling statement due to statement timeout', code: '57014' } })
@@ -51,7 +82,7 @@ const confirmaDialogo = async (page) => { await page.waitForSelector('.acn-dialo
   fs.writeFileSync(arqs.errada, nota({ numero: 102, idDest: '2', cfop: '5102' }));   // interestadual (idDest 2) com CFOP de dentro do estado
   fs.writeFileSync(arqs.lixo, '<isto nao e uma nota>');
 
-  const ctx = await abrir({ simular: simularArquivo, escritaSimulada: (url) => respostaDaGravacao(url) });
+  const ctx = await abrir({ simular: (url) => (modoProntidao ? simularProntidao(url) : null) || simularArquivo(url), escritaSimulada: (url) => respostaDaGravacao(url) });
   const { page, gravacoes, consoleErros, falhasDePagina } = ctx;
   try {
     // ═══ Cadastros: empresas ═══
@@ -245,6 +276,86 @@ const confirmaDialogo = async (page) => { await page.waitForSelector('.acn-dialo
     t = await textoDaTela(page);
     confere('OPs sem XML: só a A8.2611 aparece', /A8\.2611/.test(t) && !/A9\.2611/.test(t) && !/A1679\.2611/.test(t), t.slice(0, 400));
     confere('OPs sem XML: endereço da visão', (await page.evaluate(() => location.hash)) === '#/fiscal/arquivo/sem-xml');
+
+    // ═══ Prontidão da OP para virar nota (Faturamento) e nota guardada no Dossiê da OP — dados SIMULADOS ═══
+    modoProntidao = true;
+    await page.setViewport({ width: 1500, height: 900 });
+    await page.goto(BASE + '#/fiscal', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page);
+    await page.waitForFunction(() => /Pronta para a nota/.test(document.body.innerText), { timeout: 30000 });
+    const antesP = gravacoes.length;
+    t = await textoDaTela(page);
+    const linhasDe = (re) => page.evaluate((r) => [...document.querySelectorAll('.acn-main table tbody tr')].map(tr => tr.innerText.replace(/\s+/g, ' ')).filter(x => new RegExp(r).test(x)), re);
+    confere('prontidão: a OP com tudo completo mostra "Pronta para a nota"', (await linhasDe('A100\\.2611')).some(x => /Pronta para a nota/.test(x)), JSON.stringify(await linhasDe('A100')));
+    confere('prontidão: a OP cujo cliente não está no cadastro mostra "Faltam dados fiscais (1)"', (await linhasDe('A101\\.2611')).some(x => /Faltam dados fiscais \(1\)/.test(x)), JSON.stringify(await linhasDe('A101')));
+    confere('prontidão: o cartão do alto conta 2 prontas de 4 OPs, 2 com dado faltando', /Dados fiscais completos 2 de 4 OPs aguardando nota · 2 com dado faltando/.test(t), t.slice(0, 400));
+    confere('prontidão: o cabeçalho do lote diz "1 de 2 com dado fiscal faltando"', /1 de 2 com dado fiscal faltando/.test(t), t.slice(0, 500));
+    confere('prontidão: as duas OPs já faturadas NÃO ganham selo de prontidão', (await linhasDe('A200\\.2611|A201\\.2611')).every(x => !/Pronta para a nota|Faltam dados fiscais/.test(x)));
+    // o detalhe de uma OP incompleta
+    await page.evaluate(() => { const tr = [...document.querySelectorAll('.acn-main table tbody tr')].find(x => /A101\.2611/.test(x.innerText)); [...tr.querySelectorAll('.acn-selo')].find(b => /Faltam dados fiscais/.test(b.innerText)).click(); });
+    await page.waitForSelector('.acn-fcad-box-p', { timeout: 5000 });
+    t = await page.evaluate(() => document.querySelector('.acn-fcad-box-p').innerText.replace(/\s+/g, ' '));
+    confere('prontidão: a janela diz o que falta, com o nome do cliente da OP', /Cliente "Cliente Sumido"/.test(t) && /não achei no cadastro de clientes/.test(t), t.slice(0, 400));
+    await clicarTexto(page, '.acn-fcad-box-p button', 'Abrir Cadastros fiscais');
+    await espera(600);
+    confere('prontidão: "Abrir Cadastros fiscais" leva à aba de cadastros (#/fiscal/cadastros)', (await page.evaluate(() => location.hash)) === '#/fiscal/cadastros', await page.evaluate(() => location.hash));
+    confere('prontidão: NENHUMA gravação em toda a conferência', gravacoes.length === antesP, JSON.stringify(gravacoes.slice(antesP).map(x => x.url)));
+
+    // leitura recusada: nenhuma OP é dada como pronta nem como incompleta, e a faixa vermelha avisa
+    modoFiscalClientes = 'erro';
+    await page.goto(BASE + '#/fiscal', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page);
+    await page.waitForFunction(() => /Notas pendentes/.test(document.body.innerText) && /Não foi possível conferir os dados fiscais/.test(document.body.innerText), { timeout: 30000 });
+    t = await textoDaTela(page);
+    const selosNaTabela = await page.evaluate(() => [...document.querySelectorAll('.acn-main table .acn-selo')].map(x => x.innerText).filter(x => /Pronta para a nota|Faltam dados fiscais/.test(x)));
+    confere('prontidão: leitura recusada → faixa vermelha e NENHUM selo de pronta ou de falta na tabela', await page.evaluate(() => !!document.querySelector('.acn-faixa.tom-erro')) && selosNaTabela.length === 0, JSON.stringify(selosNaTabela));
+    modoFiscalClientes = 'ok';
+    await page.goto(BASE + '#/fiscal/conferidor', { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('input[type="file"][aria-label="Escolher arquivos XML"]', { timeout: 20000 });
+
+    // o Dossiê: a OP sem nota mostra a prontidão; a OP com nota mostra a guardada; a OP cuja nota não está no arquivo diz isso
+    await page.goto(BASE + '#/fiscal', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page);
+    await page.waitForFunction(() => [...document.querySelectorAll('.acn-main table .acn-selo')].some(x => /Pronta para a nota/.test(x.innerText)), { timeout: 30000 });
+    const abrirDossie = async (opl) => {
+      await page.evaluate((o) => { const tr = [...document.querySelectorAll('.acn-main table tbody tr')].find(x => new RegExp(o.replace('.', '\\.')).test(x.innerText)); const menu = tr.querySelector('button[aria-label="Mais ações da OP"]'); menu.click(); }, opl);
+      await espera(300);
+      await page.evaluate(() => [...document.querySelectorAll('[role="menuitem"], .acn-menu button, .acn-menu-item')].find(x => /Ver detalhes/.test(x.innerText))?.click());
+      await page.waitForFunction(() => [...document.querySelectorAll('button')].some(b => b.innerText.trim() === 'Dossiê'), { timeout: 15000 });
+      await page.evaluate(() => [...document.querySelectorAll('button')].find(b => b.innerText.trim() === 'Dossiê').click());
+      await page.waitForSelector('#dossie-op', { timeout: 30000 });
+      await page.waitForFunction(() => [...document.querySelectorAll('.acn-dos-sec-titulo')].some(x => /nota fiscal/i.test(x.innerText)), { timeout: 30000 });
+      await page.waitForFunction(() => { const s = [...document.querySelectorAll('.acn-dos-sec')].find(x => /nota fiscal/i.test(x.querySelector('.acn-dos-sec-titulo').innerText)); return s && !/Conferindo|Procurando/.test(s.innerText); }, { timeout: 20000 }).catch(() => {});   // se não terminar, o texto que ficou na tela é o que o confere mostra
+      return page.evaluate(() => [...document.querySelectorAll('.acn-dos-sec')].find(x => /nota fiscal/i.test(x.querySelector('.acn-dos-sec-titulo').innerText)).innerText.replace(/\s+/g, ' '));
+    };
+    const fecharTudo = async () => { await page.keyboard.press('Escape'); await page.evaluate(() => document.querySelectorAll('button[aria-label="Fechar"], .modal-close, .acn-opl-x').forEach(b => b.click())); await espera(400); };
+    t = await abrirDossie('A100.2611');
+    confere('dossiê: OP sem nota mostra "Pronta para a nota" e o que foi conferido', /Pronta para a nota/.test(t) && /1 item\(ns\)/.test(t), t.slice(0, 300));
+    await fecharTudo();
+    t = await abrirDossie('A101.2611');
+    confere('dossiê: OP incompleta lista o que falta', /Faltam dados fiscais/.test(t) && /não achei no cadastro de clientes/.test(t), t.slice(0, 300));
+    await fecharTudo();
+    t = await abrirDossie('A200.2611');
+    confere('dossiê: OP com nota mostra a nota guardada (nº, série, empresa e a chave)', /Nota 100/.test(t) && /série 3/.test(t) && t.includes(chaveDe(ACN, 3, 100)) && !/Sem XML guardado/.test(t), t.slice(0, 400));
+    await fecharTudo();
+    t = await abrirDossie('A201.2611');
+    confere('dossiê: OP cuja nota não está no arquivo diz "Sem XML guardado" e como guardar', /Sem XML guardado/.test(t) && /Guardar no arquivo/.test(t), t.slice(0, 300));
+    await fecharTudo();
+    // abrir a janela de uma OP grava a marca de "visto" (entity_views): é do próprio sistema, não da conferência fiscal
+    const gravouAlgoFiscal = gravacoes.slice(antesP).filter(x => !/entity_views/.test(x.url));
+    confere('dossiê e prontidão: nenhuma gravação da conferência (só a marca de "visto" da janela da OP)', gravouAlgoFiscal.length === 0, JSON.stringify(gravouAlgoFiscal.map(x => x.url)));
+    // o Faturamento com os selos e a janela do detalhe, em celular
+    await page.setViewport({ width: 390, height: 800, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+    await page.goto(BASE + '#/fiscal/conferidor', { waitUntil: 'domcontentloaded' });
+    await page.goto(BASE + '#/fiscal', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page);
+    await page.waitForFunction(() => [...document.querySelectorAll('.acn-main table .acn-selo')].some(x => /Faltam dados fiscais/.test(x.innerText)), { timeout: 30000 });
+    confere('celular 390: o Faturamento com os selos de prontidão não estoura a largura da página', await semRolagemLateral(page), String(await page.evaluate(() => document.documentElement.scrollWidth)));
+    await page.evaluate(() => [...document.querySelectorAll('.acn-main table .acn-selo')].find(x => /Faltam dados fiscais/.test(x.innerText)).click());
+    await page.waitForSelector('.acn-fcad-box-p', { timeout: 5000 });
+    confere('celular 390: a janela do detalhe cabe na tela', await page.evaluate(() => { const r = document.querySelector('.acn-fcad-box-p').getBoundingClientRect(); return r.left >= 0 && r.right <= window.innerWidth + 1; }));
+    await page.setViewport({ width: 1500, height: 900 });
+    modoProntidao = false;
 
     // ═══ Celular ═══
     for (const [rotulo, hash, esperar] of [['cadastros/empresas', '#/fiscal/cadastros', /DETECH/], ['cadastros/itens', '#/fiscal/cadastros/itens', /Itens ativos/], ['conferidor', '#/fiscal/conferidor', /Solte os arquivos/], ['arquivo/notas', '#/fiscal/arquivo', /Notas guardadas/], ['arquivo/numeracao', '#/fiscal/arquivo/numeracao', /Primeiro/]]) {

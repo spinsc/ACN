@@ -17,6 +17,8 @@ const PASTAS_PRIVADAS = [
   'compras-anexos', 'pcp-cotacoes', 'pcp-nf-fornecedor', 'pcp-fretes-cotacoes', 'pcp-fretes-canhotos', 'logistica',
   'centro-custo-despesas', 'financeiro-tarefas', 'viagens', 'terceiros', 'contratos-padrao',
   'opl-anexos', 'ops-em-criacao', 'demandas-avulsas', 'demandas-cotacoes', 'desenvolvimento', 'engenharia-tarefas', 'analise', 'vistorias', 'sac',
+  'crm-anexos',   // B3 (26/11/2026): documentos e imagens anexados ao card do CRM
+  'licitacoes', 'crm-docs',   // B4 (26/11/2026): arquivos das licitações (`crm-docs` é o que se anexa à licitação aberta pelo CRM); a imagem colada em texto (`/area-livre/`, `/nota/`) segue pública, ver B4b
 ];
 
 /**

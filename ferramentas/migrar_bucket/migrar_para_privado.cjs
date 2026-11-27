@@ -31,7 +31,9 @@ const FATIAS = {
     // dos produtos só a subpasta "projeto" (arquivos de projeto); fotos e catálogo ficam públicos. Hoje não há arquivo nela.
     .concat([{ pasta: 'produtos', so: /^produtos\/[^/]+\/projeto\// }]),
   b3: ['crm-anexos'].map((pasta) => ({ pasta })),
-  b4: ['licitacoes', 'crm-docs'].map((pasta) => ({ pasta })),   // `crm-docs` é o arquivo dos documentos das Licitações (descoberto na B0)
+  // `crm-docs` é o arquivo dos documentos das Licitações (descoberto na B0). As imagens coladas em texto (/area-livre/ com 279 arquivos, /nota/ com 106)
+  // ficam de fora: o endereço está dentro do HTML e a tela não as lê pelo ajudante (fatia B4b). 1,5 GB: rode fora do horário.
+  b4: ['licitacoes', 'crm-docs'].map((pasta) => ({ pasta, so: SEM_IMAGEM_DE_TEXTO })),
 };
 
 const arg = (nome) => { const a = process.argv.find((x) => x.startsWith('--' + nome + '=')); return a ? a.slice(nome.length + 3) : null; };

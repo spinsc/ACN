@@ -1,6 +1,6 @@
 // @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
-// DEMANDAS GERAIS — o hospedeiro da janela da demanda aberta PELO ENDEREÇO (plano PLANO_ENDERECOS_E_ROTAS.md, Fase 5, 26/11/2026).
+// DEMANDAS GERAIS — o hospedeiro da janela da demanda aberta PELO ENDEREÇO (plano PLANOS CONCLUIDOS/PLANO_ENDERECOS_E_ROTAS.md, Fase 5, 26/11/2026).
 //
 // O endereço `#/demanda/<código>` (o F5, o link colado, o Voltar e o Avançar, e a Menção ou o aviso do Calendário de uma demanda) abre a janela da demanda POR CIMA da tela em que a pessoa
 // está, para qualquer pessoa: o painel de demandas só existe dentro das telas dos setores, e quem recebe o aviso muitas vezes não tem a tela do setor. Decidido com o usuário em

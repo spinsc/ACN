@@ -1,4 +1,4 @@
-// A janela da OP e o endereço dela (plano PLANO_ENDERECOS_E_ROTAS.md, Fase 2, decidido com o usuário em 25/11/2026).
+// A janela da OP e o endereço dela (plano PLANOS CONCLUIDOS/PLANO_ENDERECOS_E_ROTAS.md, Fase 2, decidido com o usuário em 25/11/2026).
 //
 // O endereço `#/op/<número>` abre a janela da OP por cima da tela em que a pessoa está. A janela (`OplDetalheModal`) é aberta por 11 lugares do sistema
 // (a lista de cada setor, o painel de Avisos, o card do CRM, a busca geral, o número clicável `LinkOpl`…), então a regra mora na PRÓPRIA janela, no

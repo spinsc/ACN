@@ -19,6 +19,8 @@ import { EnderecosEntrega, ContratoEntregas } from './LicitacaoEntregas';
 import RichTextInput, { htmlSeguro, pareceHtmlFormatado } from './RichTextInput';
 import { logChange, useUnreadChanges, useMarkAsRead, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
+import { enviarArquivoPrivado } from './ArquivoPrivado';   // 26/11/2026 (plano do bucket privado, B4)
+import { LinkDeArquivo } from './ArquivoPrivadoTela';   // 26/11/2026 (plano do bucket privado, B4)
 import { CampoTelefone } from './CampoTelefone';
 import { conferirContatoDeLicitacao, licitacaoTemContato, mensagemContatoDaLicitacao, mensagemLicitacaoSemContato, lerContatosDaLicitacao, STATUS_QUE_NAO_PEDEM_CONTATO } from './ContatoObrigatorio';
 import { podeExcluirLicitacao, bloqueiosDeExclusao } from './ExclusaoDeCard';
@@ -314,10 +316,10 @@ async function uploadAnexo(file: File, licitacaoId: string, tipo: string): Promi
   const safeName = sanitizeFileName(file.name);
   const path = `licitacoes/${licitacaoId}/${tipo}/${Date.now()}_${safeName}`;
   const contentType = contentTypeUpload(file);
-  const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true, contentType });
-  if (error || !data) { console.error('Upload erro:', error?.message); registrarFalhaDeEnvio(error, file); return null; }
-  const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-  return pub?.publicUrl || null;
+  // bucket privado (plano do bucket privado, B4, 26/11/2026): o banco guarda "privado:<caminho>" em `url` e `anexo_url`; o nome leva Date.now(), então não há o que sobrescrever
+  const { valor, erro } = await enviarArquivoPrivado(path, file, contentType);
+  if (erro || !valor) { console.error('Upload erro:', erro?.message); registrarFalhaDeEnvio(erro, file); return null; }
+  return valor;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -900,7 +902,7 @@ function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeE
         <div key={d.id} className={'acn-lic-doc' + (itemNaoLido?.(d.id) ? ' nao-lido' : '')}>
           <div className="acn-lic-doc-corpo">
             {d.url ? (
-              <a href={d.url} target="_blank" rel="noreferrer" className="acn-lic-link-info acn-lic-doc-link"><Icone path={mdiPaperclip} size={13} />{d.nome}</a>
+              <LinkDeArquivo valor={d.url} className="acn-lic-link-info acn-lic-doc-link"><Icone path={mdiPaperclip} size={13} />{d.nome}</LinkDeArquivo>
             ) : (
               <div className="acn-forte">{d.nome}</div>
             )}
@@ -2036,9 +2038,9 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                               : <div className="acn-lic-and-txt"><Linkify text={d.conteudo} /></div>
                           )}
                           {d.anexo_url && (
-                            <a href={d.anexo_url} target="_blank" rel="noreferrer" className="acn-lic-link-info acn-lic-and-arquivo">
+                            <LinkDeArquivo valor={d.anexo_url} className="acn-lic-link-info acn-lic-and-arquivo">
                               <Icone path={mdiPaperclip} size={13} />{d.anexo_nome||'Arquivo'}
-                            </a>
+                            </LinkDeArquivo>
                           )}
                           <div className="acn-ajuda acn-lic-and-meta">
                             <span><Icone path={mdiAccountOutline} size={12} />{d.criado_por_nome||'—'}</span>
@@ -2335,9 +2337,9 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                   <div key={d.id} className={'acn-lic-doc' + (itemNaoLido(d.id) ? ' nao-lido' : '')}>
                     <div className="acn-lic-doc-corpo">
                       {d.url ? (
-                        <a href={d.url} target="_blank" rel="noreferrer" className="acn-lic-link-info acn-lic-doc-link">
+                        <LinkDeArquivo valor={d.url} className="acn-lic-link-info acn-lic-doc-link">
                           <Icone path={mdiPaperclip} size={13} />{d.nome}
-                        </a>
+                        </LinkDeArquivo>
                       ) : (
                         <div className="acn-forte">{d.nome}</div>
                       )}
