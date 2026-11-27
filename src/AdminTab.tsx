@@ -38,6 +38,8 @@ import { PainelChecklist } from './AdminPainelChecklist';
 import { PainelKPI } from './AdminPainelKPI';
 // 12e87 (26/11/2026): o painel Lixeira (24h) mora em AdminPainelLixeira.tsx, no padrão do design system, com a 7.x de achados no cabeçalho dele.
 import { PainelLixeira } from './AdminPainelLixeira';
+// 12e88 (26/11/2026): o painel Responsáveis por perfil (quem recebe as Menções de um perfil sem tê-lo) mora em AdminPainelNotificacoes.tsx, no padrão do design system, com a 7.x de achados no cabeçalho dele.
+import { PainelNotificacoes } from './AdminPainelNotificacoes';
 import { CampoMoeda } from './CampoMoeda';
 import { useAbaNoEndereco } from './AbaNoEndereco';
 
@@ -1058,78 +1060,6 @@ function PainelDados() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-// ---- PAINEL NOTIFICAÇÕES ----
-// 26/11/2026 (decisão do usuário: o WhatsApp não é usado no sistema): saiu a configuração dos eventos de aviso por WhatsApp (tabela notificacoes_config).
-// Fica só "quem responde por cada perfil" (notificacoes_responsaveis), que o sistema usa para saber quem recebe as Menções de um setor
-// (por exemplo, a chegada do veículo à matriz avisa o PCP e a Adaptação).
-
-function PainelNotificacoes() {
-  // Quem responde por um perfil sem ter esse perfil (ex.: PCP → Matheus)
-  const [responsaveis, setResponsaveis] = useState<any[]>([]);
-  const [usuariosAtivos, setUsuariosAtivos] = useState<any[]>([]);
-  const [novoResp, setNovoResp] = useState({ perfil: '', usuario_id: '' });
-  const [falhaLeitura, setFalhaLeitura] = useState('');
-  const carregarResponsaveis = async () => {
-    const [r, u] = await Promise.all([
-      supabase.from('notificacoes_responsaveis').select('id, perfil, usuario_id, usuario:auth_usuarios(nome)').order('perfil'),
-      supabase.from('auth_usuarios').select('id, nome, perfil').eq('ativo', true).order('nome'),
-    ]);
-    // leitura recusada nunca vale como "ninguém definido"
-    if (r.error || u.error) { setFalhaLeitura('Não foi possível ler a lista de responsáveis. Atualize a página e tente de novo.'); return; }
-    setFalhaLeitura('');
-    setResponsaveis(r.data || []); setUsuariosAtivos(u.data || []);
-  };
-  useEffect(() => { carregarResponsaveis(); }, []);
-  const addResponsavel = async () => {
-    if (!novoResp.perfil || !novoResp.usuario_id) { alert('Escolha o perfil e a pessoa.'); return; }
-    const { error } = await supabase.from('notificacoes_responsaveis').insert([novoResp]);
-    if (error) { alert('Não foi possível adicionar: ' + error.message); return; }
-    setNovoResp({ perfil: '', usuario_id: '' }); carregarResponsaveis();
-  };
-  const removerResponsavel = async (id: string) => {
-    if (!await confirmarRemocao('este responsável da lista de avisos')) return;
-    await supabase.from('notificacoes_responsaveis').delete().eq('id', id);
-    carregarResponsaveis();
-  };
-  // os perfis padrão, os que existem em usuários ativos e os que já têm responsável
-  const PERFIS_LISTA = [...new Set([...PERFIS, ...usuariosAtivos.map((u: any) => u.perfil).filter(Boolean), ...responsaveis.map((r: any) => r.perfil)])];
-
-  return (
-    <div>
-      {falhaLeitura && <div className="acn-empty" style={{ color: 'var(--acn-bad)' }}>{falhaLeitura}</div>}
-      <div className="sec-card">
-        <div className="sec-hdr"><span>👤 Quem responde por cada perfil</span></div>
-        <div className="sec-body" style={{ fontSize:11 }}>
-          <div style={{ fontSize:10, color:'#64748b', marginBottom:8 }}>
-            Recebe os avisos (Menções) de um perfil sem ter esse perfil (ex.: PCP → quem cuida do PCP). As permissões da pessoa não mudam.
-          </div>
-          <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:8 }}>
-            {responsaveis.map((r: any) => (
-              <span key={r.id} style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'3px 9px', border:'1px solid #99f6e4', background:'#f0fdfa', borderRadius:12 }}>
-                <strong>{r.perfil}</strong> → {r.usuario?.nome || '—'}
-                <button onClick={() => removerResponsavel(r.id)} aria-label={`Remover ${r.usuario?.nome} de ${r.perfil}`}
-                  style={{ border:'none', background:'none', color:'#94a3b8', cursor:'pointer', padding:0 }}>✕</button>
-              </span>
-            ))}
-            {!responsaveis.length && !falhaLeitura && <span style={{ color:'#94a3b8' }}>Nenhum definido.</span>}
-          </div>
-          <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-            <select className="acn-input" style={{ width:'auto' }} value={novoResp.perfil} onChange={e => setNovoResp(f => ({ ...f, perfil: e.target.value }))} aria-label="Perfil">
-              <option value="">Perfil...</option>
-              {PERFIS_LISTA.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-            <select className="acn-input" style={{ width:'auto' }} value={novoResp.usuario_id} onChange={e => setNovoResp(f => ({ ...f, usuario_id: e.target.value }))} aria-label="Pessoa">
-              <option value="">Pessoa...</option>
-              {usuariosAtivos.map((u: any) => <option key={u.id} value={u.id}>{u.nome} ({u.perfil})</option>)}
-            </select>
-            <button className="acn-btn" style={{ background:'#0f766e' }} onClick={addResponsavel}>Adicionar</button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -2335,7 +2265,7 @@ export default function AdminTab() {
       {abaAtiva === 'cotacoes_cfg' && <PainelCotacoesCfg />}
       {abaAtiva === 'markup_cfg' && <PainelMarkupCfg />}
       {abaAtiva === 'nfc_cfg'      && <PainelNfcCfg />}
-      {abaAtiva === 'notificacoes' && <PainelNotificacoes />}
+      {abaAtiva === 'notificacoes' && <PainelNotificacoes perfis={PERFIS} />}
       {abaAtiva === 'feriados'     && <PainelFeriados />}
       {/* AdminTab não recebe o usuário por props; os painéis daqui leem do
           localStorage, como os outros desta tela já fazem. */}
