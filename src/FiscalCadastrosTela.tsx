@@ -17,8 +17,9 @@ import { podeEditarCadastroFiscal } from './utils/permissoes';
 import FiscalClienteCampos from './FiscalClienteCampos';
 import FiscalItemCampos from './FiscalItemCampos';
 import {
-  lerEmitentes, salvarEmitente, lerTransportadoras, salvarTransportadora, mudarAtivoDaTransportadora, lerPendenciasDosClientes, lerPendenciasDosItens, aplicarFiscalEmLote,
+  lerEmitentes, salvarEmitente, lerTransportadoras, salvarTransportadora, mudarAtivoDaTransportadora, lerPendenciasDosClientes, lerPendenciasDosItens, aplicarFiscalEmLote, lerOpsParaLigar, ligarOpsAoCliente,
 } from './FiscalDados';
+import { agruparParaLigar, resumoDasLigacoes, gruposComSugestao } from './FiscalLigacaoDaOp';
 import {
   OPCOES_CRT, ORIGENS_FISCAIS, UFS, formDoEmitente, faltasDoEmitente, formDaTransportadora, faltasDoCliente, faltasDoItem, CAMPOS_FISCAIS_DO_CLIENTE, CAMPOS_FISCAIS_DO_ITEM, soDigitos, formatarNcm,
 } from './FiscalRegras';
@@ -421,6 +422,142 @@ function PendenciasDosItens({ currentUser }) {
   );
 }
 
+// ═══ OPs sem cliente: ligar a OP ao cliente do cadastro (27/11/2026) ═════════════════════════
+// A OP só guardava o nome escrito do cliente; a nota precisa dos dados fiscais do cadastro. Aqui o Fiscal liga cada nome ao cadastro: uma escolha vale para todas as OPs que dizem aquele cliente.
+function OpsSemCliente({ currentUser }) {
+  const podeEditar = podeEditarCadastroFiscal(currentUser);
+  const [d, setD] = useState<any>({ ops: [], clientes: [], erro: '' });
+  const [carregando, setCarregando] = useState(true);
+  const [busca, setBusca] = useState('');
+  const [mostrar, setMostrar] = useState('todos');
+  const [escolhendo, setEscolhendo] = useState<any>(null);   // o grupo para o qual se escolhe o cadastro à mão
+  const [buscaCadastro, setBuscaCadastro] = useState('');
+  const [aviso, setAviso] = useState<any>(null);
+  const [gravando, setGravando] = useState(false);
+  const carregar = async () => { setCarregando(true); const r = await lerOpsParaLigar(); setD(r); setCarregando(false); };
+  useEffect(() => { carregar(); }, []);
+
+  const grupos = useMemo(() => agruparParaLigar(d.ops, d.clientes), [d]);
+  const resumo = useMemo(() => resumoDasLigacoes(grupos), [grupos]);
+  const filtrados = useMemo(() => grupos.filter(g => {
+    if (mostrar === 'com' && g.sugestao.situacao !== 'achado') return false;
+    if (mostrar === 'sem' && g.sugestao.situacao === 'achado') return false;
+    return !busca.trim() || combinaBusca([g.nome, ...g.ops.map(o => o.opl), g.sugestao.cliente?.nome].join(' '), busca);
+  }), [grupos, busca, mostrar]);
+  const candidatos = useMemo(() => {
+    if (!escolhendo) return [];
+    const q = buscaCadastro.trim() || escolhendo.nome;
+    return d.clientes.filter(c => combinaBusca([c.nome, c.documento].join(' '), q)).slice(0, 30);
+  }, [escolhendo, buscaCadastro, d.clientes]);
+
+  const ligar = async (g: any, cliente: any) => {
+    if (gravando) return;
+    const n = g.ops.length;
+    if (!await confirmar(`Ligar ${n === 1 ? 'a OP' : `as ${n} OPs`} do cliente "${g.nome}" ao cadastro "${cliente.nome}"${cliente.documento ? ` (${formatarDocumento(cliente.documento)})` : ''}?\n\nO nome escrito na OP não muda; a nota passa a usar os dados fiscais deste cadastro.`)) return;
+    setGravando(true); setAviso(null);
+    const r = await ligarOpsAoCliente(g.ops, cliente, currentUser);
+    setGravando(false);
+    setEscolhendo(null);
+    setAviso(r.ok ? { tom: 'ok', texto: `${r.ligadas} ${r.ligadas === 1 ? 'OP ligada' : 'OPs ligadas'} a ${cliente.nome}.` } : { tom: 'erro', texto: r.erro });
+    await carregar();
+  };
+
+  const ligarOsAchados = async () => {
+    const lista = gruposComSugestao(grupos);
+    if (gravando || !lista.length) return;
+    if (!await confirmar(`Ligar ${resumo.opsComSugestao} OPs (${lista.length} ${lista.length === 1 ? 'cliente' : 'clientes'}) ao cadastro que o sistema achou sozinho?\n\nSó entram os nomes que batem com UM cadastro (pelo CPF/CNPJ da OP ou pelo nome idêntico). O que tem dois cadastros iguais ou nenhum fica de fora, para você escolher.`)) return;
+    setGravando(true); setAviso(null);
+    let ligadas = 0, clientes = 0;
+    for (const g of lista) {
+      const r = await ligarOpsAoCliente(g.ops, g.sugestao.cliente, currentUser);
+      ligadas += r.ligadas;
+      if (r.ligadas) clientes++;
+      if (!r.ok) { setGravando(false); setAviso({ tom: 'erro', texto: `${r.erro} Antes de parar: ${ligadas} OP(s) de ${clientes} cliente(s) já tinham sido ligadas.` }); await carregar(); return; }
+    }
+    setGravando(false);
+    setAviso({ tom: 'ok', texto: `${ligadas} OPs ligadas (${clientes} ${clientes === 1 ? 'cliente' : 'clientes'}).` });
+    await carregar();
+  };
+
+  const exportar = async () => {
+    await baixarPlanilha('OPs_sem_cliente_ligado', [{ nome: 'OPs', colunas: [{ rotulo: 'OP', largura: 16 }, { rotulo: 'Cliente escrito na OP', largura: 40 }, { rotulo: 'Etapa', largura: 28 }, { rotulo: 'Cadastro sugerido', largura: 40 }],
+      linhas: filtrados.flatMap(g => g.ops.map(o => [o.opl, g.nome, o.status_geral || '', g.sugestao.cliente?.nome || (g.sugestao.situacao === 'ambiguo' ? 'mais de um cadastro' : 'não achei')])) }]);
+  };
+
+  const rotuloSugestao = (g: any) => g.sugestao.situacao === 'achado'
+    ? <div><strong>{g.sugestao.cliente.nome}</strong>{g.sugestao.cliente.documento && <div className="acn-fraco acn-fcad-num">{formatarDocumento(g.sugestao.cliente.documento)}</div>}<Selo familia="ok" ponto={false}>{g.sugestao.por === 'documento' ? 'achado pelo CPF/CNPJ' : 'nome idêntico'}</Selo></div>
+    : g.sugestao.situacao === 'ambiguo' ? <Selo familia="atencao" ponto={false}>Mais de um cadastro: escolha</Selo>
+    : g.sugestao.situacao === 'sem_nome' ? <Selo familia="atencao" ponto={false}>OP sem nome de cliente</Selo>
+    : <Selo familia="atencao" ponto={false}>Não achei no cadastro</Selo>;
+
+  return (
+    <div>
+      <div className="acn-ajuda">A OP só guarda o nome do cliente como foi digitado, e a nota fiscal precisa dos dados do cadastro (inscrição estadual, município, tipo de órgão). Ligue cada nome ao cliente do cadastro: a escolha vale para todas as OPs com aquele nome. OP nova já nasce ligada quando o vendedor escolhe o cliente da lista.</div>
+      {d.erro && <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>Não foi possível ler as OPs ou os clientes ({d.erro}). A lista abaixo está incompleta.</Faixa>}
+      <div className="acn-kpis">
+        <div className="acn-kpi"><span className="rot"><i data-acn-familia="atencao" />OPs sem cliente ligado</span><span className="val acn-num">{resumo.ops}</span><span className="sub">{resumo.nomes} {resumo.nomes === 1 ? 'nome de cliente' : 'nomes de cliente'}; só as que ainda não têm nota</span></div>
+        <div className="acn-kpi"><span className="rot">O cadastro achou sozinho</span><span className="val acn-num">{resumo.opsComSugestao}</span><span className="sub">{resumo.nomesComSugestao} {resumo.nomesComSugestao === 1 ? 'nome' : 'nomes'} · {resumo.opsSemSugestao} OPs pedem a sua escolha</span></div>
+      </div>
+      <div className="acn-fcad-barra">
+        <div className="acn-cmp-busca-geral"><Icone path={mdiMagnify} size={14} /><input className="acn-input" type="search" value={busca} onChange={e => setBusca(e.target.value)} aria-label="Buscar cliente ou OP" placeholder="Cliente, número da OP…" /></div>
+        <Chips rotulo="Mostrar" ativo={mostrar} onChange={setMostrar} itens={[{ id: 'todos', rotulo: 'Todos' }, { id: 'com', rotulo: 'Com cadastro achado' }, { id: 'sem', rotulo: 'Pedem escolha' }]} />
+        <Botao pequeno icone={mdiRefresh} onClick={carregar} disabled={carregando || gravando}>Atualizar</Botao>
+        <Botao pequeno icone={mdiDownload} onClick={exportar} disabled={carregando || !filtrados.length}>Baixar planilha</Botao>
+      </div>
+      {podeEditar && (
+        <div className="acn-fcad-barra-lote" role="group" aria-label="Ligar de uma vez">
+          <strong>{resumo.nomesComSugestao ? `${resumo.opsComSugestao} OPs com cadastro achado` : 'Nada para ligar sozinho'}</strong>
+          <Botao pequeno variante="primario" onClick={ligarOsAchados} disabled={!resumo.nomesComSugestao || gravando}>{gravando ? 'Ligando…' : `Ligar as ${resumo.opsComSugestao} OPs que o cadastro achou`}</Botao>
+        </div>
+      )}
+      {aviso && <Faixa tom={aviso.tom}>{aviso.texto}</Faixa>}
+      {filtrados.length > LIMITE_NA_TELA && <Faixa tom="atencao">Mostrando os primeiros {LIMITE_NA_TELA} de {filtrados.length} clientes. Use a busca ou os filtros; a planilha leva todos.</Faixa>}
+      <div className="acn-rolagem">
+        <table className="acn-tabela acn-densa">
+          <thead><tr><th>Cliente escrito na OP</th><th>OPs</th><th>Cadastro</th><th>Ações</th></tr></thead>
+          <tbody>
+            {filtrados.slice(0, LIMITE_NA_TELA).map(g => (
+              <tr key={g.chave || 'sem-nome'}>
+                <td><strong>{g.nome || '(sem nome)'}</strong></td>
+                <td><span className="acn-num">{g.ops.length}</span><div className="acn-fraco acn-fcad-num">{g.ops.slice(0, 4).map(o => o.opl).join(', ')}{g.ops.length > 4 ? ` e mais ${g.ops.length - 4}` : ''}</div></td>
+                <td>{rotuloSugestao(g)}</td>
+                <td><div className="acn-fcad-acoes">
+                  {podeEditar && g.sugestao.situacao === 'achado' && <Botao pequeno variante="primario" disabled={gravando} onClick={() => ligar(g, g.sugestao.cliente)}>Ligar</Botao>}
+                  {podeEditar && g.chave && <Botao pequeno disabled={gravando} onClick={() => { setBuscaCadastro(''); setEscolhendo(g); }}>{g.sugestao.situacao === 'achado' ? 'Outro cliente…' : 'Escolher o cliente…'}</Botao>}
+                </div></td>
+              </tr>
+            ))}
+            {!filtrados.length && <tr><td colSpan={4} className="acn-centro acn-fraco">{carregando ? 'Carregando…' : d.erro ? 'Não foi possível ler.' : !busca && mostrar === 'todos' ? 'Toda OP que ainda vai virar nota está ligada a um cliente do cadastro. 🎉' : 'Nenhum cliente com esse filtro.'}</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      {escolhendo && (
+        <Janela titulo={`Ligar "${escolhendo.nome}" a um cliente do cadastro`} onClose={() => setEscolhendo(null)}
+          rodape={<Botao onClick={() => setEscolhendo(null)}>Cancelar</Botao>}>
+          <p className="acn-fcad-dica">{escolhendo.ops.length === 1 ? 'A OP' : `As ${escolhendo.ops.length} OPs`} {escolhendo.ops.slice(0, 6).map(o => o.opl).join(', ')}{escolhendo.ops.length > 6 ? ' e outras' : ''} passam a usar o cadastro que você escolher. Cliente que não está na lista se cadastra em Clientes.</p>
+          <div className="acn-cmp-busca-geral"><Icone path={mdiMagnify} size={14} /><input className="acn-input" type="search" autoFocus value={buscaCadastro} onChange={e => setBuscaCadastro(e.target.value)} aria-label="Buscar no cadastro de clientes" placeholder={`Buscar no cadastro (começa por "${escolhendo.nome}")`} /></div>
+          <div className="acn-rolagem">
+            <table className="acn-tabela acn-densa">
+              <thead><tr><th>Cliente</th><th>CPF/CNPJ</th><th>Cidade</th><th>Ações</th></tr></thead>
+              <tbody>
+                {candidatos.map(c => (
+                  <tr key={c.id}>
+                    <td><strong>{c.nome}</strong></td>
+                    <td className="acn-fcad-num">{c.documento ? formatarDocumento(c.documento) : '—'}</td>
+                    <td>{[c.cidade, c.estado].filter(Boolean).join(' / ') || '—'}</td>
+                    <td><div className="acn-fcad-acoes"><Botao pequeno variante="primario" disabled={gravando} onClick={() => ligar(escolhendo, c)}>Ligar a este</Botao></div></td>
+                  </tr>
+                ))}
+                {!candidatos.length && <tr><td colSpan={4} className="acn-centro acn-fraco">Nenhum cliente do cadastro combina com a busca.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </Janela>
+      )}
+    </div>
+  );
+}
+
 // ═══ A aba ════════════════════════════════════════════════════════════════════════════════════
 export default function FiscalCadastrosTela({ currentUser }) {
   const [visao, setVisao] = useAbaNoEndereco({ tela: 'fiscal', nivel: 1, pai: 'cadastros' }) as [string, (v: any) => void];
@@ -433,11 +570,13 @@ export default function FiscalCadastrosTela({ currentUser }) {
         { id: 'transportadoras', rotulo: 'Transportadoras' },
         { id: 'clientes', rotulo: 'Clientes: o que falta' },
         { id: 'itens', rotulo: 'Itens: o que falta' },
+        { id: 'ops', rotulo: 'OPs sem cliente' },
       ]} />
       {visao === 'empresas' && <EmpresasEmitentes currentUser={currentUser} podeEditar={podeEditar} />}
       {visao === 'transportadoras' && <TransportadorasFiscais currentUser={currentUser} podeEditar={transportadoraPode} />}
       {visao === 'clientes' && <PendenciasDosClientes currentUser={currentUser} />}
       {visao === 'itens' && <PendenciasDosItens currentUser={currentUser} />}
+      {visao === 'ops' && <OpsSemCliente currentUser={currentUser} />}
     </div>
   );
 }

@@ -617,6 +617,8 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           prazo_garantia:         form.prazo_garantia?.trim() || null,
           data_chegada_veiculo:   ehVendaEnvio || soServicoDeTerceiro ? null : (form.data_chegada_veiculo || null),
           cliente_nome:           form.cliente_nome.trim(),
+          // 27/11/2026: o cadastro escolhido (ou o do card do CRM) fica gravado na OP; sem ele o Fiscal só achava o cliente pelo nome escrito. Digitar por cima do nome desfaz a escolha.
+          cliente_id:             form._cliente_id || null,
           responsavel_comercial:  form.responsavel.trim(),
           observacoes_comercial:  form.observacoes || null,
           // Etapa 18e (13/10/2026): a OP nasce direto no PCP (decisão do usuário em 12/10/2026: a Engenharia só recebe pedidos de desenvolvimento)
@@ -867,7 +869,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
             <div className="acn-nop-rot">Cliente *</div>
             <ClienteAutocomplete
               value={form.cliente_nome}
-              onChange={v => setF('cliente_nome', v)}
+              onChange={v => setForm(f => ({ ...f, cliente_nome: v, _cliente_id: null }))}
               onSelect={c => setForm(f => ({ ...f, cliente_nome: c.nome, _cliente_id: c.id }))}
               placeholder="Nome do cliente..."
             />

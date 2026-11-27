@@ -22,7 +22,7 @@ export const MAX_COPIAS = 30;
 export const CAMPOS_COPIADOS_DA_OP = [
   // o que é a venda
   'tipo_op', 'faturamento_empresa', 'tipo_projeto', 'origem_venda', 'fluxo_entrega', 'categoria_servico', 'is_demanda_direta_engenharia',
-  'cliente_nome', 'cliente_final', 'responsavel_comercial', 'vendedor', 'canal_venda', 'edital', 'proposta', 'local_instalacao', 'centro_custo',
+  'cliente_nome', 'cliente_id', 'cliente_final', 'responsavel_comercial', 'vendedor', 'canal_venda', 'edital', 'proposta', 'local_instalacao', 'centro_custo',
   'crm_oportunidade_id', 'licitacao_id',
   // entrega e frete (o destino é da venda, não do carro)
   'destino_cidade', 'destino_uf', 'destino_cep', 'destino_logradouro', 'destino_numero', 'destino_bairro', 'destino_complemento', 'destino_destinatario', 'destino_telefone', 'frete_responsavel',

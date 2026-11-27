@@ -63,10 +63,37 @@ const simularProntidao = (url) => {
   return null;
 };
 
+// ── ligar a OP ao cliente do cadastro (27/11/2026): OPs e clientes SIMULADOS; só vale com `modoLigacao` ligado ──
+let modoLigacao = false;
+let modoLeituraDasOps = 'ok';      // 'ok' | 'erro'
+let modoGravacaoDaLigacao = 'ok';  // 'ok' | 'vazio' (o banco responde "ok, 0 linhas")
+const opLig = (n, o) => ({ id: uid(40 + n), status_geral: 'Em Producao', numero_nf: null, cliente_id: null, cnpj_faturamento: null, ...o });
+const OPS_LIGACAO = [
+  opLig(1, { opl: 'A300.2611/01', cliente_nome: 'Prefeitura de Teste' }), opLig(2, { opl: 'A300.2611/02', cliente_nome: ' prefeitura de TESTE ' }),
+  opLig(3, { opl: 'A301.2611', cliente_nome: 'Cliente Sumido' }), opLig(4, { opl: 'A302.2611', cliente_nome: 'Gemeo' }),
+];
+const CLIENTES_LIGACAO = [
+  { id: 'c1', nome: 'PREFEITURA DE TESTE', tipo: 'PJ', documento: '11222333000181', cidade: 'Palhoca', estado: 'SC' }, { id: 'c2', nome: 'OUTRA PREFEITURA', tipo: 'PJ', documento: '45723174000110', cidade: 'Biguacu', estado: 'SC' },
+  { id: 'c3', nome: 'GEMEO', tipo: 'PJ', documento: null, cidade: 'A', estado: 'SC' }, { id: 'c4', nome: 'GEMEO', tipo: 'PJ', documento: null, cidade: 'B', estado: 'SC' },
+  { id: 'c5', nome: 'CLIENTE SUMIDO LTDA', tipo: 'PJ', documento: '05481897000136', cidade: 'Sao Jose', estado: 'SC' },
+];
+const simularLigacao = (url) => {
+  if (/\/rest\/v1\/oples\?.*cliente_id=is\.null/.test(url)) return modoLeituraDasOps === 'erro' ? { status: 500, body: { message: 'boom', code: 'XX000' } } : { status: 200, body: OPS_LIGACAO };
+  if (/\/rest\/v1\/clientes\?.*select=id%2Cnome%2Ctipo%2Cdocumento%2Ccidade%2Cestado|\/rest\/v1\/clientes\?select=id,nome,tipo,documento,cidade,estado/.test(url)) return { status: 200, body: CLIENTES_LIGACAO };
+  return null;
+};
+
 let modoDaGravacao = 'ok';
-const respostaDaGravacao = (url) => /rpc\/fiscal_guardar/.test(url)
-  ? (modoDaGravacao === 'ok' ? { status: 200, body: { novas: 1, atualizadas: 0, repetidas: 1, eventos_novos: 0, eventos_repetidos: 0, inutilizacoes_novas: 0, inutilizacoes_repetidas: 0 } } : { status: 400, body: { message: 'canceling statement due to statement timeout', code: '57014' } })
-  : null;
+const respostaDaGravacao = (url, metodo, corpo) => {
+  if (/rpc\/fiscal_guardar/.test(url)) return modoDaGravacao === 'ok' ? { status: 200, body: { novas: 1, atualizadas: 0, repetidas: 1, eventos_novos: 0, eventos_repetidos: 0, inutilizacoes_novas: 0, inutilizacoes_repetidas: 0 } } : { status: 400, body: { message: 'canceling statement due to statement timeout', code: '57014' } };
+  // o PATCH que liga a OP ao cliente: o banco devolve as linhas que ele tocou (os ids do filtro `id=in.(...)`)
+  if (modoLigacao && metodo === 'PATCH' && /\/rest\/v1\/oples\?/.test(url)) {
+    if (modoGravacaoDaLigacao === 'vazio') return { status: 200, body: [] };
+    const ids = (decodeURIComponent(url).match(/id=in\.\(([^)]*)\)/) || [, ''])[1].split(',').map(s => s.replace(/"/g, '').trim()).filter(Boolean);
+    return { status: 200, body: ids.map(id => ({ id })) };
+  }
+  return null;
+};
 
 const clicarTexto = (page, seletor, texto) => page.evaluate((s, t) => { const el = [...document.querySelectorAll(s)].find(e => (e.innerText || e.textContent || '').trim() === t || (e.getAttribute('aria-label') || '') === t); if (!el) return false; el.click(); return true; }, seletor, texto);
 const textoDaTela = (page) => page.evaluate(() => (document.querySelector('.acn-main') || document.body).innerText.replace(/\s+/g, ' ').trim());
@@ -82,7 +109,7 @@ const confirmaDialogo = async (page) => { await page.waitForSelector('.acn-dialo
   fs.writeFileSync(arqs.errada, nota({ numero: 102, idDest: '2', cfop: '5102' }));   // interestadual (idDest 2) com CFOP de dentro do estado
   fs.writeFileSync(arqs.lixo, '<isto nao e uma nota>');
 
-  const ctx = await abrir({ simular: (url) => (modoProntidao ? simularProntidao(url) : null) || simularArquivo(url), escritaSimulada: (url) => respostaDaGravacao(url) });
+  const ctx = await abrir({ simular: (url) => (modoLigacao ? simularLigacao(url) : null) || (modoProntidao ? simularProntidao(url) : null) || simularArquivo(url), escritaSimulada: (url, metodo, corpo) => respostaDaGravacao(url, metodo, corpo) });
   const { page, gravacoes, consoleErros, falhasDePagina } = ctx;
   try {
     // ═══ Cadastros: empresas ═══
@@ -356,6 +383,81 @@ const confirmaDialogo = async (page) => { await page.waitForSelector('.acn-dialo
     confere('celular 390: a janela do detalhe cabe na tela', await page.evaluate(() => { const r = document.querySelector('.acn-fcad-box-p').getBoundingClientRect(); return r.left >= 0 && r.right <= window.innerWidth + 1; }));
     await page.setViewport({ width: 1500, height: 900 });
     modoProntidao = false;
+
+    // ═══ Ligar a OP ao cliente do cadastro (Cadastros fiscais › OPs sem cliente) — OPs e clientes SIMULADOS ═══
+    modoLigacao = true;
+    await page.setViewport({ width: 1500, height: 900 });
+    await page.goto(BASE + '#/fiscal/conferidor', { waitUntil: 'domcontentloaded' });
+    await page.goto(BASE + '#/fiscal/cadastros/ops', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page);
+    await page.waitForFunction(() => /OPs sem cliente ligado/.test(document.body.innerText) && /A300\.2611/.test(document.body.innerText), { timeout: 30000 });
+    t = await textoDaTela(page);
+    const linhasLig = (re) => page.evaluate((r) => [...document.querySelectorAll('.acn-main table tbody tr')].map(tr => tr.innerText.replace(/\s+/g, ' ')).filter(x => new RegExp(r).test(x)), re);
+    confere('ligação: o endereço da visão é #/fiscal/cadastros/ops', (await page.evaluate(() => location.hash)) === '#/fiscal/cadastros/ops', await page.evaluate(() => location.hash));
+    confere('ligação: o cartão conta 4 OPs em 3 nomes de cliente', /OPs sem cliente ligado 4 3 nomes de cliente/.test(t), t.slice(0, 500));
+    confere('ligação: o cartão conta 2 OPs com cadastro achado sozinho e 2 que pedem escolha', /O cadastro achou sozinho 2 1 nome · 2 OPs pedem a sua escolha/.test(t), t.slice(0, 600));
+    const lPref = await linhasLig('Prefeitura de Teste|prefeitura de TESTE');
+    confere('ligação: o mesmo nome escrito de dois jeitos vira UMA linha, com as duas OPs', lPref.length === 1 && /A300\.2611\/01, A300\.2611\/02/.test(lPref[0]) && /PREFEITURA DE TESTE/.test(lPref[0]) && /nome idêntico/.test(lPref[0]) && /Ligar/.test(lPref[0]), JSON.stringify(lPref));
+    confere('ligação: dois cadastros com o mesmo nome pedem a escolha da pessoa (nada é chutado)', (await linhasLig('Gemeo')).some(x => /Mais de um cadastro: escolha/.test(x) && !/ Ligar Escolher/.test(x)), JSON.stringify(await linhasLig('Gemeo')));
+    confere('ligação: nome que não está no cadastro diz "Não achei no cadastro"', (await linhasLig('Cliente Sumido')).some(x => /Não achei no cadastro/.test(x)), JSON.stringify(await linhasLig('Sumido')));
+    confere('ligação: nada foi gravado só de abrir a tela', gravacoes.filter(x => /oples/.test(x.url)).length === 0);
+
+    // ligar os que o cadastro achou: um PATCH só, com as duas OPs, só nas que ainda estão sem ligação
+    const antesL = gravacoes.length;
+    await clicarTexto(page, '.acn-fcad-barra-lote button', 'Ligar as 2 OPs que o cadastro achou');
+    t = await confirmaDialogo(page);
+    confere('ligação em lote: a pergunta diz quantas OPs e quantos clientes, e que o nome escrito não muda', /2 OPs \(1 cliente\)/.test(t) && /UM cadastro/.test(t), t.slice(0, 300));
+    await page.waitForFunction(() => /OPs ligadas/.test(document.body.innerText), { timeout: 10000 });
+    const patchs = gravacoes.slice(antesL).filter(x => x.metodo === 'PATCH' && /\/rest\/v1\/oples\?/.test(x.url));
+    const urlP = patchs[0] ? decodeURIComponent(patchs[0].url) : '';
+    confere('ligação em lote: UM PATCH em oples, só das OPs sem ligação, com as duas ids e o cliente certo', patchs.length === 1 && /cliente_id=is\.null/.test(urlP) && urlP.includes(uid(41)) && urlP.includes(uid(42)) && !urlP.includes(uid(43)) && JSON.parse(patchs[0].corpo).cliente_id === 'c1', JSON.stringify(patchs.map(x => [x.url, x.corpo])));
+    confere('ligação em lote: o corpo grava SÓ o cliente_id (o nome e o resto da OP não mudam)', JSON.stringify(Object.keys(JSON.parse(patchs[0].corpo))) === '["cliente_id"]', patchs[0] && patchs[0].corpo);
+    confere('ligação em lote: aviso verde com a contagem', /2 OPs ligadas a PREFEITURA DE TESTE/.test(await textoDaTela(page)) || /2 OPs ligadas \(1 cliente\)/.test(await textoDaTela(page)), (await textoDaTela(page)).slice(0, 300));
+
+    // escolher o cliente à mão: a janela mostra os candidatos (começa pelo nome da OP) e liga só a OP daquele nome
+    await page.evaluate(() => { const tr = [...document.querySelectorAll('.acn-main table tbody tr')].find(x => /Cliente Sumido/.test(x.innerText)); [...tr.querySelectorAll('button')].find(b => /Escolher o cliente/.test(b.innerText)).click(); });
+    await page.waitForSelector('.acn-fcad-box', { timeout: 5000 });
+    t = await page.evaluate(() => document.querySelector('.acn-fcad-box').innerText.replace(/\s+/g, ' '));
+    confere('ligação à mão: a janela lista o cadastro parecido (CLIENTE SUMIDO LTDA) com o CNPJ formatado', /CLIENTE SUMIDO LTDA/.test(t) && /05\.481\.897\/0001-36/.test(t) && !/OUTRA PREFEITURA/.test(t), t.slice(0, 400));
+    const antesM = gravacoes.length;
+    await clicarTexto(page, '.acn-fcad-box button', 'Ligar a este');
+    t = await confirmaDialogo(page);
+    confere('ligação à mão: a pergunta nomeia a OP, o nome escrito e o cadastro escolhido', /"Cliente Sumido"/.test(t) && /CLIENTE SUMIDO LTDA/.test(t), t.slice(0, 300));
+    await page.waitForFunction(() => /OP ligada a CLIENTE SUMIDO LTDA/.test(document.body.innerText), { timeout: 10000 });
+    const patchM = gravacoes.slice(antesM).filter(x => x.metodo === 'PATCH' && /\/rest\/v1\/oples\?/.test(x.url));
+    confere('ligação à mão: um PATCH só, com a id da A301 e o cliente c5', patchM.length === 1 && decodeURIComponent(patchM[0].url).includes(uid(43)) && JSON.parse(patchM[0].corpo).cliente_id === 'c5', JSON.stringify(patchM.map(x => [x.url, x.corpo])));
+    confere('ligação à mão: a janela fechou', await page.evaluate(() => !document.querySelector('.acn-fcad-box')));
+
+    // o banco responde "ok, 0 linhas" (OP já ligada por outra pessoa): a tela NÃO diz que deu certo
+    modoGravacaoDaLigacao = 'vazio';
+    await page.evaluate(() => { const tr = [...document.querySelectorAll('.acn-main table tbody tr')].find(x => /Prefeitura de Teste|prefeitura de TESTE/.test(x.innerText)); [...tr.querySelectorAll('button')].find(b => b.innerText.trim() === 'Ligar').click(); });
+    await confirmaDialogo(page);
+    await page.waitForFunction(() => /O banco ligou 0 de 2 OPs/.test(document.body.innerText), { timeout: 10000 });
+    confere('ligação: o banco confirmou 0 linhas → faixa vermelha, nunca "ligadas"', await page.evaluate(() => !!document.querySelector('.acn-faixa.tom-erro')) && !/2 OPs ligadas/.test((await textoDaTela(page)).replace(/O banco ligou 0 de 2 OPs/, '')));
+    modoGravacaoDaLigacao = 'ok';
+
+    // leitura recusada: a lista diz que está incompleta e NÃO afirma que toda OP está ligada
+    modoLeituraDasOps = 'erro';
+    await page.goto(BASE + '#/fiscal/cadastros/itens', { waitUntil: 'domcontentloaded' });
+    await page.goto(BASE + '#/fiscal/cadastros/ops', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page);
+    await page.waitForFunction(() => /Não foi possível ler as OPs ou os clientes/.test(document.body.innerText), { timeout: 30000 });
+    t = await textoDaTela(page);
+    confere('ligação: leitura recusada → faixa vermelha e NUNCA "toda OP está ligada"', !/Toda OP que ainda vai virar nota está ligada/.test(t) && await page.evaluate(() => !!document.querySelector('.acn-faixa.tom-erro')), t.slice(0, 300));
+    modoLeituraDasOps = 'ok';
+
+    // celular
+    await page.setViewport({ width: 390, height: 800, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+    await page.goto(BASE + '#/fiscal/cadastros/itens', { waitUntil: 'domcontentloaded' });
+    await page.goto(BASE + '#/fiscal/cadastros/ops', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page);
+    await page.waitForFunction(() => /A300\.2611/.test(document.body.innerText), { timeout: 30000 });
+    confere('celular 390: OPs sem cliente não estoura a largura da página', await semRolagemLateral(page), String(await page.evaluate(() => document.documentElement.scrollWidth)));
+    await page.evaluate(() => { const tr = [...document.querySelectorAll('.acn-main table tbody tr')].find(x => /Cliente Sumido/.test(x.innerText)); [...tr.querySelectorAll('button')].find(b => /Escolher o cliente/.test(b.innerText)).click(); });
+    await page.waitForSelector('.acn-fcad-box', { timeout: 5000 });
+    confere('celular 390: a janela de escolher o cliente cabe na tela', await page.evaluate(() => { const r = document.querySelector('.acn-fcad-box').getBoundingClientRect(); return r.left >= 0 && r.right <= window.innerWidth + 1; }));
+    await page.setViewport({ width: 1500, height: 900 });
+    modoLigacao = false;
 
     // ═══ Celular ═══
     for (const [rotulo, hash, esperar] of [['cadastros/empresas', '#/fiscal/cadastros', /DETECH/], ['cadastros/itens', '#/fiscal/cadastros/itens', /Itens ativos/], ['conferidor', '#/fiscal/conferidor', /Solte os arquivos/], ['arquivo/notas', '#/fiscal/arquivo', /Notas guardadas/], ['arquivo/numeracao', '#/fiscal/arquivo/numeracao', /Primeiro/]]) {
