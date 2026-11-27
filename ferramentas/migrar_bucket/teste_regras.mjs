@@ -9,6 +9,19 @@ eq(caminhoEhPrivado('sac/os_1_saida/assinatura_123.png'), true, 'sac assinatura'
 eq(caminhoEhPrivado('sac/os_1/123_foto.jpg'), false, 'sac foto fica público');
 eq(caminhoEhPrivado('sac/a/b/assinatura_1.png'), false, 'sac aninhado não é');
 eq(caminhoEhPrivado('licitacoes/x.pdf'), false, 'licitacoes');
+// B1 (26/11/2026)
+for (const p of ['compras-anexos/PC1/a.pdf', 'pcp-cotacoes/c1/a.pdf', 'pcp-nf-fornecedor/f1/a.pdf', 'pcp-fretes-cotacoes/c1/a.pdf', 'pcp-fretes-canhotos/f1/a.jpg', 'logistica/1_ab.jpg',
+  'centro-custo-despesas/d1/a.pdf', 'financeiro-tarefas/t1/a.pdf', 'viagens/v1/contrato/a.pdf', 'viagens/v1/comprovantes/hotel/a.pdf', 'terceiros/p1/a.pdf', 'contratos-padrao/a.pdf'])
+  eq(caminhoEhPrivado(p), true, 'b1 ' + p);
+eq(caminhoEhPrivado('pcp-cotacoes/c1/area-livre/123.png'), false, 'imagem de área livre fica pública');
+eq(caminhoEhPrivado('crm-docs/L1/nota/123.png'), false, 'imagem de nota fica pública');
+eq(caminhoEhPrivado('licitacoes/L1/area-livre/123.png'), false, 'área livre da licitação');
+eq(caminhoEhPrivado('compras-anexos'), false, 'só o nome da pasta');
+eq(caminhoEhPrivado('compras-anexosx/a.pdf'), false, 'prefixo parecido de B1');
+eq(caminhoEhPrivado('opl-anexos/a.pdf'), false, 'B2 ainda público');
+eq(caminhoDoValor(P + 'compras-anexos/PC1/a%20b.pdf'), { caminho: 'compras-anexos/PC1/a b.pdf', antigo: true }, 'url antiga de compras');
+eq(caminhoDoValor(P + 'pcp-cotacoes/c1/area-livre/1.png'), null, 'url antiga de área livre passa direto');
+eq(caminhoDoValor(P + 'terceiros/p1/a.pdf'), { caminho: 'terceiros/p1/a.pdf', antigo: true }, 'url antiga de terceiros');
 eq(caminhoEhPrivado('chatter/x'), false, 'prefixo parecido');
 eq(caminhoEhPrivado(''), false, 'vazio');
 eq(caminhoEhPrivado(null), false, 'nulo');

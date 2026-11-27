@@ -11,8 +11,8 @@ import { confirmar } from './Feedback';
 import { logChange } from './AuditSystem';
 import { nomeSeguroDeArquivo } from './FormatosArquivo';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
+import { enviarArquivoPrivado } from './ArquivoPrivado';
 
-const BUCKET = 'acn-media';
 export const LIMITE_COMPROVANTE = 20 * 1024 * 1024;
 export const ITENS_DE_COMPROVANTE = ['combustivel', 'pedagios', 'hospedagem', 'alimentacao', 'outros'];
 
@@ -31,10 +31,10 @@ export async function anexarComprovante(viagem: any, item: string, arquivos: Fil
   for (const f of arquivos) {
     if (f.size > LIMITE_COMPROVANTE) { erro = `Não foi possível enviar "${f.name}": o arquivo passa de 20 MB.`; continue; }
     const caminho = `viagens/${viagem.id}/comprovantes/${item}/${Date.now()}-${nomeSeguroDeArquivo(f.name)}`;
-    const { error } = await supabase.storage.from(BUCKET).upload(caminho, f, { upsert: false });
-    if (error) { erro = `Não foi possível enviar "${f.name}": ${explicarErroDeEnvio(error, f)}`; continue; }
-    const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(caminho);
-    novos.push({ item, nome: f.name, url: pub.publicUrl, path: caminho, tamanho: f.size, por: currentUser?.nome || currentUser?.email || null, em: new Date().toISOString() });
+    // bucket privado (plano do bucket privado, B1, 26/11/2026): o banco guarda "privado:<caminho>" em `url`
+    const { valor, erro: erroEnvio } = await enviarArquivoPrivado(caminho, f, f.type || undefined);
+    if (erroEnvio || !valor) { erro = `Não foi possível enviar "${f.name}": ${explicarErroDeEnvio(erroEnvio, f)}`; continue; }
+    novos.push({ item, nome: f.name, url: valor, path: caminho, tamanho: f.size, por: currentUser?.nome || currentUser?.email || null, em: new Date().toISOString() });
   }
   if (!novos.length) return { lista: atuais, erro };
   const lista = [...atuais, ...novos];

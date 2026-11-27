@@ -17,9 +17,12 @@ const DESTINO = 'acn-privado';
 
 // O que cada fatia leva. `so` = só os arquivos da pasta que casam com a expressão. Mantenha igual ao plano (PLANO_BUCKET_PRIVADO.md, seção 4)
 // e à lista de pastas privadas do código (src/ArquivoPrivadoRegras.ts, caminhoEhPrivado), que cresce a cada fatia publicada.
+const SEM_IMAGEM_DE_TEXTO = /^(?!.*/(area-livre|nota)/)/;
 const FATIAS = {
   '5b': [{ pasta: 'chat' }, { pasta: 'assinaturas' }, { pasta: 'sac', so: /^sac\/[^/]+\/assinatura_[^/]*$/ }],
-  b1: ['compras-anexos', 'pcp-cotacoes', 'pcp-nf-fornecedor', 'logistica', 'pcp-fretes-canhotos', 'centro-custo-despesas', 'financeiro-tarefas', 'viagens', 'terceiros', 'contratos-padrao'].map((pasta) => ({ pasta })),
+  // imagem colada dentro de texto formatado (/area-livre/, /nota/) fica pública: o endereço está dentro do HTML (ver caminhoEhPrivado em src/ArquivoPrivadoRegras.ts)
+  b1: ['compras-anexos', 'pcp-cotacoes', 'pcp-nf-fornecedor', 'pcp-fretes-cotacoes', 'logistica', 'pcp-fretes-canhotos', 'centro-custo-despesas', 'financeiro-tarefas', 'viagens', 'terceiros', 'contratos-padrao']
+    .map((pasta) => ({ pasta, so: SEM_IMAGEM_DE_TEXTO })),
   b2: ['opl-anexos', 'ops-em-criacao', 'demandas-avulsas', 'demandas-cotacoes', 'desenvolvimento', 'engenharia-tarefas', 'analise', 'produtos', 'vistorias', 'sac'].map((pasta) => ({ pasta })),
   b3: ['crm-anexos'].map((pasta) => ({ pasta })),
   b4: ['licitacoes', 'crm-docs'].map((pasta) => ({ pasta })),   // `crm-docs` é o arquivo dos documentos das Licitações (descoberto na B0)

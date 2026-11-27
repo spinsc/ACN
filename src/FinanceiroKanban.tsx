@@ -20,6 +20,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
+import { enviarArquivoPrivado } from './ArquivoPrivado';
+import { LinkDeArquivo } from './ArquivoPrivadoTela';
 import { logChange } from './AuditSystem';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { DEPTOS } from './RhDepartamentos';
@@ -257,12 +259,12 @@ function AnexosTarefaFinanceiro({ tarefaId, currentUser }) {
     setSubindo(true);
     for (const f of arquivos) {
       const caminho = `financeiro-tarefas/${tarefaId}/${nomeSeguro(f.name)}`;
-      const { error } = await supabase.storage.from('acn-media').upload(caminho, f, { upsert: false });
-      if (error) { alert(`Não subiu "${f.name}": ${explicarErroDeEnvio(error, f)}`); continue; }
-      const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(caminho);
+      // bucket privado (plano do bucket privado, B1, 26/11/2026): o banco guarda "privado:<caminho>"
+      const { valor, erro: erroEnvio } = await enviarArquivoPrivado(caminho, f, f.type || undefined);
+      if (erroEnvio || !valor) { alert(`Não subiu "${f.name}": ${explicarErroDeEnvio(erroEnvio, f)}`); continue; }
       // 7.48: se a linha não grava, o arquivo subiu mas não aparece na lista — a pessoa precisa saber
       const { error: erroLinha } = await supabase.from('financeiro_tarefa_anexos').insert([{
-        tarefa_id: tarefaId, nome: f.name, url: pub.publicUrl, tamanho: f.size,
+        tarefa_id: tarefaId, nome: f.name, url: valor, tamanho: f.size,
         criado_por: currentUser?.email, criado_por_nome: currentUser?.nome,
       }]);
       if (erroLinha) alert(`"${f.name}" subiu, mas não foi registrado na tarefa: ${erroLinha.message}`);
@@ -300,9 +302,9 @@ function AnexosTarefaFinanceiro({ tarefaId, currentUser }) {
       )}
       {lista.map(a => (
         <div key={a.id} className="acn-kb-anexo">
-          <a href={a.url} target="_blank" rel="noopener noreferrer" className="acn-kb-anexo-link">
+          <LinkDeArquivo valor={a.url} className="acn-kb-anexo-link">
             <Icone path={mdiPaperclip} size={14} /> {a.nome} <span className="acn-ajuda">{fmtTam(a.tamanho)}</span>
-          </a>
+          </LinkDeArquivo>
           <span className="acn-ajuda">{a.criado_por_nome}</span>
           {a.criado_por === currentUser?.email && (
             <Botao variante="perigo-sec" pequeno icone={mdiClose} onClick={() => apagar(a)} title="Apagar" aria-label="Apagar" />

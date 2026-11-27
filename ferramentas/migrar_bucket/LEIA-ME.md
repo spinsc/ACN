@@ -30,6 +30,13 @@ Se uma cópia ficou pela metade (tamanho diferente), o `--copiar` a refaz; o `--
 O `--apagar` se recusa a rodar se algum arquivo ainda não foi copiado ou foi copiado com tamanho diferente, e só aceita com `--tela-publicada` (você confirma que a tela da fatia
 está no ar). Apagar o original público é **definitivo**: por isso o passo 4 só depois de conferir no sistema que os arquivos abrem.
 
+## Conferência da B1 (varredura do código + navegador com o armazenamento simulado)
+
+```powershell
+# com o servidor de desenvolvimento no ar (porta 5173); NODE_PATH aponta para uma pasta node_modules que tenha o puppeteer-core
+node ferramentas/migrar_bucket/teste_b1.cjs
+```
+
 ## Conferência das regras (sem banco)
 
 ```powershell
