@@ -24,18 +24,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { mdiClose, mdiPause, mdiPencilOutline, mdiPlay, mdiTrashCanOutline } from '@mdi/js';
 import { supabase } from './supabaseClient';
 import { explicarErroDoBanco } from './ErroDoBanco';
-import { confirmar, mostrarAviso } from './Feedback';
+import { confirmar } from './Feedback';
 import { Botao, Chips, Faixa, Selo } from './Interface';
 import Linkify from './Linkify';
-import { criadoEmLabel, paraCampoDataHora } from './AvisoSistemaWidget';
 import { podeMexerNoAviso, podePublicarAviso } from './utils/permissoes';
-
-const TABELA = 'avisos_sistema';
-const VAZIO = { titulo: '', mensagem: '', tipo: 'admin', criticidade: 'media', permanente: false, data_expiracao: '' };
-const CRITICIDADES = ['baixa', 'media', 'alta'];
+// 12e93 (27/11/2026): as regras e a gravação saíram daqui para os módulos que o quadro flutuante 📌 também usa (o formulário, a validade, as perguntas, as frases, a trava
+// do clique duplo e a conferência da linha devolvida), para as duas telas não divergirem de novo.
+import {
+  CRITICIDADES, FORM_AVISO_VAZIO as VAZIO, PERGUNTA_DESCARTAR_ALTERACAO, criadoEmLabel, faltaTextoNoAviso, formDoAviso, mesmoFormAviso, perguntaDescartarAoAbrir,
+} from './AvisosRegras';
+import { TABELA_AVISOS as TABELA, alternarAtivoDoAviso, excluirAviso, salvarAviso, useGravacaoTravada } from './AvisosGravacao';
 
 const lerUsuario = () => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } };
-const mesmoForm = (a: any, b: any) => ['titulo', 'mensagem', 'tipo', 'criticidade', 'permanente', 'data_expiracao'].every(k => (a[k] || '') === (b[k] || '') || (k === 'permanente' && !!a[k] === !!b[k]));
 
 export function PainelAvisos() {
   const currentUser = lerUsuario();
@@ -47,9 +47,7 @@ export function PainelAvisos() {
   const [form, setForm] = useState<any>({ ...VAZIO });
   const [original, setOriginal] = useState<any>({ ...VAZIO });   // o que o formulário tinha ao abrir: serve para saber se há algo digitado a perder
   const [editId, setEditId] = useState<string | null>(null);
-  const [ocupado, setOcupado] = useState(false);
   const [filtro, setFiltro] = useState<'todos' | 'ativos' | 'expirados'>('ativos');
-  const trava = useRef(false);   // vale desde o primeiro clique (o estado só chega no desenho seguinte)
   const pedido = useRef(0);
   const cartaoForm = useRef<HTMLDivElement>(null);
 
@@ -64,80 +62,28 @@ export function PainelAvisos() {
   }, []);
   useEffect(() => { carregar(); }, [carregar]);
 
-  const sujo = !mesmoForm(form, original);
+  const { comTrava, ocupado, trava } = useGravacaoTravada(carregar);   // a trava vale desde o primeiro clique; a lista é relida no fim, aconteça o que acontecer
+  const sujo = !mesmoFormAviso(form, original);
   const zerarForm = () => { setEditId(null); setForm({ ...VAZIO }); setOriginal({ ...VAZIO }); };
 
-  // roda uma gravação com a trava ligada desde o primeiro clique e relê a lista no fim, aconteça o que acontecer
-  const comTrava = async (fn: () => Promise<void>) => {
-    if (trava.current) return;
-    trava.current = true; setOcupado(true);
-    try { await fn(); }
-    catch (e: any) { mostrarAviso('Não foi possível concluir: ' + explicarErroDoBanco(e), 'erro'); }
-    finally { await carregar(); trava.current = false; setOcupado(false); }
-  };
-
-  const salvar = () => comTrava(async () => {
-    const titulo = (form.titulo || '').trim(), mensagem = (form.mensagem || '').trim();
-    if (!titulo || !mensagem) return;
-    const alvo = editId ? avisos.find((x: any) => x.id === editId) : null;
-    if (editId ? !(alvo && podeMexerNoAviso(currentUser, alvo)) : !podePublicarAviso(currentUser)) {
-      mostrarAviso('Você não tem permissão para fazer isso com este aviso.', 'erro'); return;
-    }
-    let expira: string | null = null;
-    if (!form.permanente && form.data_expiracao) {
-      const d = new Date(form.data_expiracao);
-      if (isNaN(d.getTime())) { mostrarAviso('A data de validade não é válida. Confira o campo "Válido até".', 'atencao'); return; }
-      // aviso com validade que já passou nasce expirado: ninguém o veria (suposição minha: perguntar, não barrar)
-      if (d.getTime() <= Date.now() && !await confirmar(`A validade que você escolheu (${d.toLocaleString('pt-BR')}) já passou. O aviso nasce expirado e ninguém o verá. Continuar mesmo assim?`)) return;
-      expira = d.toISOString();
-    }
-    const payload: any = { titulo, mensagem, tipo: form.tipo, criticidade: form.criticidade, permanente: !!form.permanente, data_expiracao: expira };
-    let r: any;
-    if (editId) {
-      // editar NÃO mexe em "ativo": antes o payload forçava ativo:true e editar um aviso desativado o reativava
-      r = await supabase.from(TABELA).update(payload).eq('id', editId).select('id');
-    } else {
-      payload.ativo = true; payload.criado_por = currentUser.email || ''; payload.criado_por_nome = currentUser.nome || '';
-      r = await supabase.from(TABELA).insert([payload]).select('id');
-    }
-    if (r.error || (r.data || []).length === 0) {
-      mostrarAviso(`Não foi possível ${editId ? 'salvar o aviso' : 'publicar o aviso'}: ${r.error ? explicarErroDoBanco(r.error) : 'o banco não aplicou a mudança (o aviso mudou ou você não tem permissão)'}.`, 'erro');
-      return;   // o formulário fica como está, com o que foi digitado
-    }
-    mostrarAviso(editId ? `Aviso "${titulo}" atualizado.` : `Aviso "${titulo}" publicado.`, 'ok');
-    zerarForm();
-  });
+  const salvar = () => comTrava(async () => { if (await salvarAviso({ form, editId, avisos, usuario: currentUser })) zerarForm(); });   // falhou: o formulário fica como está, com o que foi digitado
 
   const excluir = (av: any) => comTrava(async () => {
-    if (!podeMexerNoAviso(currentUser, av)) return;
-    if (!await confirmar(`Excluir o aviso "${av.titulo}"?\n\nEle some para todo mundo e não dá para desfazer.`)) return;
-    const { error, data } = await supabase.from(TABELA).delete().eq('id', av.id).select('id');
-    if (error || (data || []).length === 0) { mostrarAviso(`Não foi possível excluir o aviso "${av.titulo}": ${error ? explicarErroDoBanco(error) : 'o banco não aplicou a exclusão (você não tem permissão ou o aviso já não existe)'}.`, 'erro'); return; }
-    mostrarAviso(`Aviso "${av.titulo}" excluído.`, 'ok');
-    if (editId === av.id) zerarForm();   // o formulário apontava para uma linha que acabou de sair
+    if (await excluirAviso({ av, usuario: currentUser }) && editId === av.id) zerarForm();   // o formulário apontava para uma linha que acabou de sair
   });
 
-  const alternarAtivo = (av: any) => comTrava(async () => {
-    if (!podeMexerNoAviso(currentUser, av)) return;
-    const { error, data } = await supabase.from(TABELA).update({ ativo: !av.ativo }).eq('id', av.id).select('id');
-    const verbo = av.ativo ? 'desativar' : 'reativar';
-    if (error || (data || []).length === 0) { mostrarAviso(`Não foi possível ${verbo} o aviso "${av.titulo}": ${error ? explicarErroDoBanco(error) : 'o banco não aplicou a mudança (você não tem permissão ou o aviso já não existe)'}.`, 'erro'); return; }
-    mostrarAviso(`Aviso "${av.titulo}" ${av.ativo ? 'desativado' : 'reativado'}.`, 'ok');
-  });
+  const alternarAtivo = (av: any) => comTrava(async () => { await alternarAtivoDoAviso({ av, usuario: currentUser }); });
 
   const iniciarEdicao = async (av: any) => {
     if (trava.current || !podeMexerNoAviso(currentUser, av) || editId === av.id) return;
-    if (sujo && !await confirmar(editId ? 'Você tem alterações não salvas no aviso que está aberto. Descartar e abrir este?' : 'Você tem um aviso novo meio escrito. Descartar o que digitou e abrir este para editar?')) return;
-    const f = {
-      titulo: av.titulo || '', mensagem: av.mensagem || '', tipo: av.tipo || 'admin', criticidade: CRITICIDADES.includes(av.criticidade) ? av.criticidade : 'media',
-      permanente: !!av.permanente, data_expiracao: paraCampoDataHora(av.data_expiracao),
-    };
+    if (sujo && !await confirmar(perguntaDescartarAoAbrir(!!editId))) return;
+    const f = formDoAviso(av);
     setEditId(av.id); setForm(f); setOriginal(f);
     cartaoForm.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });   // no celular a lista fica abaixo do formulário
   };
   const cancelarEdicao = async () => {
     if (trava.current) return;
-    if (sujo && !await confirmar('Descartar o que foi alterado neste aviso?')) return;
+    if (sujo && !await confirmar(PERGUNTA_DESCARTAR_ALTERACAO)) return;
     zerarForm();
   };
 
@@ -145,7 +91,7 @@ export function PainelAvisos() {
   const expirado = (av: any) => !av.permanente && !!av.data_expiracao && new Date(av.data_expiracao) <= agora;
   const ehAtivo = (av: any) => av.ativo && !expirado(av);
   const visiveis = avisos.filter(av => filtro === 'ativos' ? ehAtivo(av) : filtro === 'expirados' ? !ehAtivo(av) : true);
-  const faltaTexto = !form.titulo?.trim() || !form.mensagem?.trim();
+  const faltaTexto = faltaTextoNoAviso(form);
   const set = (patch: any) => setForm((f: any) => ({ ...f, ...patch }));
 
   return (

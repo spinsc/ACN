@@ -2,43 +2,25 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import Linkify from './Linkify';
+import { explicarErroDoBanco } from './ErroDoBanco';
 import { confirmar } from './Feedback';
 import { podePublicarAviso, podeMexerNoAviso } from './utils/permissoes';
-import { Botao } from './Interface';
+import { Botao, Faixa } from './Interface';
+// 12e93 (27/11/2026): o formulário, a validade, as perguntas, as frases e a gravação (com a trava do clique duplo e a conferência da linha devolvida) são os MESMOS do painel
+// do Admin e moram nestes dois módulos; antes este quadro tinha a cópia antiga, que dava por feita uma gravação que o banco negou.
+import {
+  FORM_AVISO_VAZIO, PERGUNTA_DESCARTAR_ALTERACAO, PERGUNTA_DESCARTAR_RASCUNHO, criadoEmLabel, faltaTextoNoAviso, formDoAviso, mesmoFormAviso, perguntaDescartarAoAbrir,
+} from './AvisosRegras';
+import { excluirAviso, salvarAviso, useGravacaoTravada } from './AvisosGravacao';
 
 // A paleta por criticidade (baixa/média/alta: fundo, borda, texto e bolinha) mora no design.css, por `data-crit` (12e58→12e59, 09/10/2026).
 
 const CRIT_ORDER = { alta: 0, media: 1, baixa: 2 };
 
-const VAZIO_FORM = {
-  titulo: '', mensagem: '', tipo: 'admin', criticidade: 'media',
-  permanente: false, data_expiracao: '',
-};
-
 function prazoLabel(av: any): string {
   if (av.permanente) return '📌 Permanente';
   if (av.data_expiracao) return `⏱ Até ${new Date(av.data_expiracao).toLocaleDateString('pt-BR')}`;
   return '';
-}
-
-// Pedido do usuário em 29/09/2026: mostrar o horário em que o aviso foi
-// publicado, não só quem publicou. `criado_em` já é gravado pelo banco
-// (timestamptz), então é só exibir. Fica aqui para o painel flutuante e a tela
-// de Admin mostrarem o mesmo formato.
-export function criadoEmLabel(av: any): string {
-  if (!av?.criado_em) return '';
-  const d = new Date(av.criado_em);
-  if (isNaN(d.getTime())) return '';
-  return `🕐 ${d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`;
-}
-
-// "2026-10-04T13:19:45+00:00" → "2026-10-04T10:19": a hora de quem usa, no formato do campo de data e hora. Antes a edição cortava o texto em UTC e a validade abria 3 h adiantada.
-export function paraCampoDataHora(iso: any): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return '';
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 // ─── componente ──────────────────────────────────────────────────────────────
@@ -51,8 +33,11 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
   const minimizadoRef = useRef(true);
   minimizadoRef.current = minimizado;
   const [mostraForm, setMostraForm]   = useState(false);
-  const [form, setForm]               = useState<any>({ ...VAZIO_FORM });
-  const [salvando, setSalvando]       = useState(false);
+  const [form, setForm]               = useState<any>({ ...FORM_AVISO_VAZIO });
+  const [original, setOriginal]       = useState<any>({ ...FORM_AVISO_VAZIO });   // o que o formulário tinha ao abrir: serve para saber se há algo digitado a perder
+  const [erro, setErro]               = useState('');
+  const [lido, setLido]               = useState(false);
+  const pedido = useRef(0);
   const [pos, setPos]                 = useState<{ x: number; y: number } | null>(null);
   const [podePublicar, setPodePublicar] = useState(false);
   const [ehDev, setEhDev]             = useState(false);
@@ -90,19 +75,23 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
 
   // ── load ──────────────────────────────────────────────────────────────────
   const carregar = useCallback(async () => {
-    const { data } = await supabase
-      .from('avisos_sistema')
-      .select('*')
-      .eq('ativo', true)
-      .order('criado_em', { ascending: false });
-
+    const meu = ++pedido.current;
+    let r: any;
+    try { r = await supabase.from('avisos_sistema').select('*').eq('ativo', true).order('criado_em', { ascending: false }); } catch (e: any) { r = { error: e }; }
+    if (meu !== pedido.current) return;   // chegou depois de uma leitura mais nova: não vale
+    setLido(true);
+    // leitura recusada NUNCA vale como "nenhum aviso": diz o motivo e mantém a lista que já havia (o quadro é um recado, não pode sumir por um tropeço de rede)
+    if (r.error) { setErro(explicarErroDoBanco(r.error)); return; }
+    setErro('');
     const now = new Date();
-    const ativos = (data || []).filter(
+    const ativos = (r.data || []).filter(
       (av) => av.permanente || (av.data_expiracao && new Date(av.data_expiracao) > now),
     );
     ativos.sort((a, b) => (CRIT_ORDER[a.criticidade] ?? 9) - (CRIT_ORDER[b.criticidade] ?? 9));
     setAvisos(ativos);
   }, []);
+  const { comTrava, ocupado, trava } = useGravacaoTravada(carregar);   // a trava vale desde o primeiro clique; a lista é relida no fim, aconteça o que acontecer
+  const sujo = !mesmoFormAviso(form, original);
 
   useEffect(() => {
     carregar();
@@ -181,49 +170,35 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
     document.addEventListener('mouseup', up);
   }, [pos]);
 
-  // ── salvar (novo aviso ou edição) ─────────────────────────────────────────────────────
-  const salvar = async () => {
-    if (!form.titulo?.trim() || !form.mensagem?.trim()) return;
-    const alvo = editId ? avisos.find((a: any) => a.id === editId) : null;
-    if (editId ? !(alvo && podeMexerNoAviso(eu, alvo)) : !podePublicar) { alert('Você não tem permissão para fazer isso com este aviso.'); return; }
-    setSalvando(true);
-    const campos = {
-      titulo:         form.titulo.trim(),
-      mensagem:       form.mensagem.trim(),
-      tipo:           form.tipo,
-      criticidade:    form.criticidade,
-      permanente:     !!form.permanente,
-      data_expiracao: (!form.permanente && form.data_expiracao) ? new Date(form.data_expiracao).toISOString() : null,
-    };
-    // editar NÃO mexe em "ativo" nem no autor (antes o painel só sabia publicar)
-    const { error } = editId
-      ? await supabase.from('avisos_sistema').update(campos).eq('id', editId)
-      : await supabase.from('avisos_sistema').insert([{ ...campos, ativo: true, criado_por: user?.email || '', criado_por_nome: user?.nome || '' }]);
-    setSalvando(false);
-    if (error) { alert('Erro ao salvar o aviso: ' + error.message); return; }
-    setForm({ ...VAZIO_FORM });
-    setEditId(null);
-    setMostraForm(false);
-    await carregar();
+  // ── publicar, editar e excluir (12e93: a gravação é a do painel do Admin, AvisosGravacao.ts) ──────────────────────────────
+  const zerarForm = () => { setEditId(null); setForm({ ...FORM_AVISO_VAZIO }); setOriginal({ ...FORM_AVISO_VAZIO }); };
+  const fecharForm = () => { zerarForm(); setMostraForm(false); };
+
+  const salvar = () => comTrava(async () => { if (await salvarAviso({ form, editId, avisos, usuario: eu })) fecharForm(); });   // falhou: o formulário fica como está, com o que foi digitado
+
+  const iniciarEdicao = async (av: any) => {
+    if (trava.current || !podeMexerNoAviso(eu, av) || editId === av.id) return;
+    if (sujo && !await confirmar(perguntaDescartarAoAbrir(!!editId))) return;
+    const f = formDoAviso(av);
+    setEditId(av.id); setForm(f); setOriginal(f); setMostraForm(true);
   };
 
-  const iniciarEdicao = (av: any) => {
-    if (!podeMexerNoAviso(eu, av)) return;
-    setEditId(av.id);
-    setForm({
-      titulo: av.titulo, mensagem: av.mensagem, tipo: av.tipo, criticidade: av.criticidade,
-      permanente: !!av.permanente, data_expiracao: paraCampoDataHora(av.data_expiracao),
-    });
-    setMostraForm(true);
-  };
+  const excluir = (av: any) => comTrava(async () => {
+    if (await excluirAviso({ av, usuario: eu }) && editId === av.id) fecharForm();   // o formulário apontava para uma linha que acabou de sair
+  });
 
-  const excluir = async (av: any) => {
-    if (!podeMexerNoAviso(eu, av)) return;
-    if (!await confirmar(`Excluir o aviso "${av.titulo}"?`)) return;
-    const { error } = await supabase.from('avisos_sistema').delete().eq('id', av.id);
-    if (error) { alert('Erro ao excluir o aviso: ' + error.message); return; }
-    if (editId === av.id) { setEditId(null); setForm({ ...VAZIO_FORM }); setMostraForm(false); }
-    await carregar();
+  // o "+" abre o formulário; o mesmo botão, como "✕", fecha (e pergunta antes de jogar fora o que foi digitado)
+  const alternarForm = async () => {
+    if (trava.current) return;
+    if (!mostraForm) { setMostraForm(true); return; }
+    if (sujo && !await confirmar(editId ? PERGUNTA_DESCARTAR_ALTERACAO : PERGUNTA_DESCARTAR_RASCUNHO)) return;
+    fecharForm();
+  };
+  // antes, minimizar fechava o formulário mas deixava os dados do aviso em edição: o "+" seguinte abria um "Novo Aviso" já preenchido, que publicava uma cópia
+  const minimizar = async () => {
+    if (trava.current) return;
+    if (mostraForm && sujo && !await confirmar(editId ? PERGUNTA_DESCARTAR_ALTERACAO : PERGUNTA_DESCARTAR_RASCUNHO)) return;
+    fecharForm(); setMinimizado(true); setPos(POS_MINIMIZADO());
   };
 
   // ── render ────────────────────────────────────────────────────────────────
@@ -273,8 +248,10 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
                   variante={mostraForm ? 'perigo' : 'primario'}
                   className="acn-avs-mais"
                   onMouseDown={e => e.stopPropagation()}
-                  onClick={() => { if (mostraForm) { setEditId(null); setForm({ ...VAZIO_FORM }); } setMostraForm(f => !f); }}
-                  title={editId ? 'Cancelar a edição' : 'Novo Aviso'}
+                  onClick={alternarForm}
+                  disabled={ocupado}
+                  aria-label={mostraForm ? (editId ? 'Cancelar a edição' : 'Fechar o formulário') : 'Novo aviso'}
+                  title={mostraForm ? (editId ? 'Cancelar a edição' : 'Fechar o formulário') : 'Novo Aviso'}
                 >
                   {mostraForm ? '✕' : '+'}
                 </Botao>
@@ -284,7 +261,7 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
                 variante="discreto"
                 className="acn-avs-min"
                 onMouseDown={e => e.stopPropagation()}
-                onClick={() => { setMinimizado(true); setMostraForm(false); setEditId(null); setPos(POS_MINIMIZADO()); }}
+                onClick={minimizar}
                 title="Minimizar"
               >
                 —
@@ -345,17 +322,25 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
                   pequeno
                   className="acn-avs-publicar"
                   onClick={salvar}
-                  disabled={salvando || !form.titulo?.trim() || !form.mensagem?.trim()}
+                  disabled={ocupado || faltaTextoNoAviso(form)}
                 >
-                  {salvando ? (editId ? 'Salvando...' : 'Publicando...') : (editId ? '💾 Salvar alterações' : '📢 Publicar Aviso')}
+                  {ocupado ? (editId ? 'Salvando...' : 'Publicando...') : (editId ? '💾 Salvar alterações' : '📢 Publicar Aviso')}
                 </Botao>
               </div>
             </div>
           )}
 
+          {/* leitura recusada: nunca vale como "nenhum aviso" (12e93) */}
+          {erro && (
+            <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>
+              Não foi possível ler os avisos ({erro}). Isso não quer dizer que não haja nenhum publicado.
+            </Faixa>
+          )}
+
           {/* lista de avisos */}
           <div className="acn-avs-lista">
-            {avisos.length === 0 && (
+            {!lido && <div className="acn-avs-vazio">Carregando…</div>}
+            {lido && !erro && avisos.length === 0 && (
               <div className="acn-avs-vazio">
                 Nenhum aviso ativo no momento.
               </div>
@@ -385,10 +370,10 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
                   {/* editar e excluir: só o autor do aviso ou quem tem a marca DEV (02/10/2026) */}
                   {podeMexerNoAviso(eu, av) && (
                     <div className="acn-avs-acoes">
-                      <Botao pequeno className="acn-avs-ed" onClick={() => iniciarEdicao(av)} title="Editar este aviso">
+                      <Botao pequeno className="acn-avs-ed" disabled={ocupado} onClick={() => iniciarEdicao(av)} title="Editar este aviso">
                         ✏️ Editar
                       </Botao>
-                      <Botao pequeno variante="perigo-sec" className="acn-avs-ex" onClick={() => excluir(av)} title="Excluir este aviso">
+                      <Botao pequeno variante="perigo-sec" className="acn-avs-ex" disabled={ocupado} onClick={() => excluir(av)} title="Excluir este aviso">
                         🗑 Excluir
                       </Botao>
                     </div>
