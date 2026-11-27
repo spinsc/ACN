@@ -1140,6 +1140,10 @@ html body .modal-box.acn-modal-cadastro.acn-compra-jan { width: min(640px, 95vw)
 .acn-ms-itens { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
 /* 10/11/2026: a janela "Ver" mostra tudo o que foi preenchido; a lista de andamentos pode ser longa, então rola dentro da janela. */
 .acn-ms-rolagem { max-height: 220px; overflow-y: auto; padding-right: 6px; }
+/* anexar arquivo a uma compra pedida (27/11/2026): botão, dica e, ao arrastar um arquivo por cima, borda tracejada */
+.acn-ms-anexar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; padding: 8px; border: 1.5px dashed transparent; border-radius: var(--acn-r3); }
+.acn-ms-anexar.arrastando { border-color: var(--acn-brand); background: color-mix(in srgb, var(--acn-brand) 8%, transparent); }
+.acn-ms-anexar .acn-faixa { flex: 1 1 100%; }
 .acn-ms-secao { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--acn-line); font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--acn-muted); }
 /* ── Kanban do SAC (05/10/2026): 3 colunas lado a lado; no celular uma embaixo da outra. Só aparência ── */
 .acn-kb { display: grid; grid-template-columns: repeat(3, minmax(250px, 1fr)); gap: 12px; align-items: start; overflow-x: auto; }
