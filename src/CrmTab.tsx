@@ -3,6 +3,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { anexarValoresDasOps, anexarValoresDaOp } from './OpValores';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
+import { enviarArquivoPrivado } from './ArquivoPrivado';   // 26/11/2026 (plano do bucket privado, B4)
+import { LinkDeArquivo } from './ArquivoPrivadoTela';   // 26/11/2026 (plano do bucket privado, B4)
 import { contentTypeUpload } from './FormatosArquivo';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { DEPTOS } from './RhDepartamentos';
@@ -1680,13 +1682,13 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
         const path = `crm-docs/${modalAbrir.id}/${abrirTabDir}/${Date.now()}.${ext}`;
         // Office/planilhas sobem como octet-stream — ver FormatosArquivo.ts
         const ct = contentTypeUpload(abrirUploadFile);
-        const { error: upErr } = await supabase.storage.from('acn-media').upload(path, abrirUploadFile, { contentType: ct });
-        if (upErr) {
+        // bucket privado (plano do bucket privado, B4, 26/11/2026): o banco guarda "privado:<caminho>"
+        const { valor: valorPriv, erro: upErr } = await enviarArquivoPrivado(path, abrirUploadFile, ct);
+        if (upErr || !valorPriv) {
           alert(`Falha ao enviar "${abrirUploadFile.name}": ${explicarErroDeEnvio(upErr, abrirUploadFile)}`);
           return;
         }
-        const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-        url = pub.publicUrl;
+        url = valorPriv;
         nome = abrirUploadFile.name;
       }
       const { data: novoDoc, error: errDoc } = await supabase.from('licitacao_documentos').insert([{
@@ -4998,9 +5000,9 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                                 <div className="acn-crm-ab-item-txt"><Linkify text={d.conteudo} /></div>
                               )}
                               {d.url && (
-                                <a href={d.url} target="_blank" rel="noopener noreferrer" className="acn-crm-ab-item-arq">
+                                <LinkDeArquivo valor={d.url} className="acn-crm-ab-item-arq">
                                   <Icone path={mdiPaperclip} size={13} />{d.nome || 'Arquivo'}
-                                </a>
+                                </LinkDeArquivo>
                               )}
                               <div className="acn-ajuda acn-crm-ab-item-meta">
                                 <span><Icone path={mdiAccountOutline} size={12} />{d.criado_por_nome||'—'}</span>
@@ -5098,9 +5100,9 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                         <div key={d.id||i} className={'acn-crm-ab-item' + (itemNaoLido(d.id) ? ' nao-lido' : '')}>
                           <div className="acn-crm-ab-item-corpo">
                             {d.url && (
-                              <a href={d.url} target="_blank" rel="noopener noreferrer" className="acn-crm-ab-item-arq">
+                              <LinkDeArquivo valor={d.url} className="acn-crm-ab-item-arq">
                                 <Icone path={mdiPaperclip} size={13} />{d.nome || 'Arquivo'}
-                              </a>
+                              </LinkDeArquivo>
                             )}
                             {d.conteudo && <div className="acn-crm-ab-item-txt"><Linkify text={d.conteudo} /></div>}
                             <div className="acn-ajuda acn-crm-ab-item-meta">

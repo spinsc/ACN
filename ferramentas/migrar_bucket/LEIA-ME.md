@@ -37,6 +37,16 @@ está no ar). Apagar o original público é **definitivo**: por isso o passo 4 s
 node ferramentas/migrar_bucket/teste_b1.cjs
 ```
 
+## Conferência da B4 (varredura do código + navegador com o armazenamento simulado)
+
+```powershell
+node ferramentas/migrar_bucket/teste_b4.cjs
+```
+
+(Cria e apaga sozinho um arquivo provisório `src/zz_teste_b4_montar.tsx`; precisa do servidor de desenvolvimento na porta 5173. Não monta a tela das licitações: ela é conferida pela varredura do código.)
+
+**Rodar a cópia da B4 fora do horário de uso:** são ~1.560 arquivos, 1,5 GB. Comece pelo ensaio (`--fatia=b4`, sem `--copiar`).
+
 ## Conferência da B3 (varredura do código + navegador com o armazenamento simulado)
 
 ```powershell

@@ -8,7 +8,7 @@ eq(caminhoEhPrivado('assinaturas/cq_A1.png'), true, 'assinaturas');
 eq(caminhoEhPrivado('sac/os_1_saida/assinatura_123.png'), true, 'sac assinatura');
 eq(caminhoEhPrivado('sac/os_1/123_foto.jpg'), true, 'B2: sac foto é privada');
 eq(caminhoEhPrivado('sac/os_1/arquivos/123_a.pdf'), true, 'B2: sac aninhado é privado');
-eq(caminhoEhPrivado('licitacoes/x.pdf'), false, 'licitacoes');
+eq(caminhoEhPrivado('licitacoes/L1/edital_anexos/1_x.pdf'), true, 'B4: licitacoes é privado');
 // B1 (26/11/2026)
 for (const p of ['compras-anexos/PC1/a.pdf', 'pcp-cotacoes/c1/a.pdf', 'pcp-nf-fornecedor/f1/a.pdf', 'pcp-fretes-cotacoes/c1/a.pdf', 'pcp-fretes-canhotos/f1/a.jpg', 'logistica/1_ab.jpg',
   'centro-custo-despesas/d1/a.pdf', 'financeiro-tarefas/t1/a.pdf', 'viagens/v1/contrato/a.pdf', 'viagens/v1/comprovantes/hotel/a.pdf', 'terceiros/p1/a.pdf', 'contratos-padrao/a.pdf'])
@@ -22,7 +22,10 @@ for (const p of ['opl-anexos', 'ops-em-criacao', 'demandas-avulsas', 'demandas-c
 eq(caminhoEhPrivado('opl-anexos/a/area-livre/x.png'), false, 'B2: imagem de texto segue pública');
 eq(caminhoEhPrivado('produtos/p/fotos/1.jpg'), false, 'produtos segue público');
 eq(caminhoEhPrivado('crm-anexos/a/x.pdf'), true, 'B3: crm-anexos é privado');
-eq(caminhoEhPrivado('crm-docs/L1/a.pdf'), false, 'B3: crm-docs (licitações) segue público até a B4');
+eq(caminhoEhPrivado('crm-docs/L1/andamento/1.pdf'), true, 'B4: crm-docs é privado');
+eq(caminhoEhPrivado('licitacoes/L1/andamento/1_a.pdf'), true, 'B4: andamento da licitação é privado');
+eq(caminhoDoValor(P + 'licitacoes/L1/edital_anexos/1_a.pdf'), { caminho: 'licitacoes/L1/edital_anexos/1_a.pdf', antigo: true }, 'B4: url antiga de licitação vira privada');
+eq(caminhoDoValor(P + 'licitacoes/L1/area-livre/1.png'), null, 'B4: imagem de área livre passa direto');
 eq(caminhoDoValor(P + 'crm-anexos/o1/1_a.docx'), { caminho: 'crm-anexos/o1/1_a.docx', antigo: true }, 'B3: url antiga de crm-anexos vira privada');
 eq(caminhoDoValor(P + 'compras-anexos/PC1/a%20b.pdf'), { caminho: 'compras-anexos/PC1/a b.pdf', antigo: true }, 'url antiga de compras');
 eq(caminhoDoValor(P + 'pcp-cotacoes/c1/area-livre/1.png'), null, 'url antiga de área livre passa direto');
@@ -39,7 +42,7 @@ eq(caminhoDoValor(P + 'chat/a/1_%C3%A1.pdf'), { caminho: 'chat/a/1_á.pdf', anti
 eq(caminhoDoValor(P + 'sac/os_1/assinatura_9.png'), { caminho: 'sac/os_1/assinatura_9.png', antigo: true }, 'url antiga sac assinatura');
 eq(caminhoDoValor(P + 'sac/os_1/9_foto.jpg'), { caminho: 'sac/os_1/9_foto.jpg', antigo: true }, 'B2: url antiga de foto do sac vira privada');
 eq(caminhoDoValor(P + 'produtos/p1/fotos/1.jpg'), null, 'produtos segue público (decisão do usuário)');
-eq(caminhoDoValor(P + 'licitacoes/x.pdf'), null, 'url antiga de outra pasta passa direto');
+eq(caminhoDoValor(P + 'produtos/p1/fotos/x.pdf'), null, 'url antiga de outra pasta passa direto');
 eq(caminhoDoValor('https://outro.site/arquivo.png'), null, 'url de fora');
 eq(caminhoDoValor(''), null, 'vazio');
 eq(caminhoDoValor(undefined), null, 'indefinido');
