@@ -12,6 +12,7 @@
 import { bloqueioForaDaGarantia, podeVerGarantia, COBERTURAS_GARANTIA } from './GarantiaModelo';
 import { lerValorDigitado } from './LerValor';
 import { telefoneComFormatoValido } from './Telefone';
+import type { Familia } from './Interface';
 
 export type Cobranca = 'garantia' | 'cobrada';
 export const ROTULOS_COBRANCA: Record<Cobranca, string> = { garantia: 'Sem cobrança (garantia ou cortesia)', cobrada: 'Cobrada do cliente' };
@@ -343,7 +344,7 @@ export const LEGENDAS_DE_FLUXO: { rotulo: string; etapas: readonly string[] }[] 
 ];
 
 export type ColunaDoQuadro = 'pendente' | 'andamento' | 'fiscal' | 'concluido';
-export const COLUNAS_DO_QUADRO: { id: ColunaDoQuadro; rotulo: string; familia: string }[] = [
+export const COLUNAS_DO_QUADRO: { id: ColunaDoQuadro; rotulo: string; familia: Familia }[] = [
   { id: 'pendente', rotulo: 'PENDENTE', familia: 'atencao' },
   { id: 'andamento', rotulo: 'EM ANDAMENTO', familia: 'info' },
   { id: 'fiscal', rotulo: 'NO FISCAL / AGUARDANDO ENTREGA', familia: 'marca' },

@@ -1,10 +1,10 @@
-// @ts-nocheck
 // Cadastros fiscais › Regras (módulo fiscal, Etapa 3, 27/11/2026): as regras fiscais versionadas (CFOP, CST, alíquota por situação), a aprovação e o simulador.
 // As regras estão em FiscalMotor.ts, a leitura e a gravação em FiscalRegrasDados.ts e as tabelas em supabase/sql/fiscal_regras.sql. NADA aqui emite nota: a tabela nasce vazia e o que a
 // contabilidade não confirmou fica marcado "a confirmar" e não vale para emitir. Decidido com o usuário em 27/11/2026: versão aprovada fica congelada; aprovam Admin e gerentes, e quem editou por último não aprova.
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { mdiClose, mdiPlus, mdiPencilOutline, mdiDelete, mdiRefresh } from '@mdi/js';
 import { Botao, Faixa, Selo } from './Interface';
+import type { Familia, Tom } from './Interface';
 import { confirmar, pedirTexto } from './Feedback';
 import { podeEditarCadastroFiscal, ehAdminOuGerente } from './utils/permissoes';
 import { lerEmitentes } from './FiscalDados';
@@ -20,7 +20,7 @@ const nomeDaOperacao = (id: string) => ORIGENS_DE_NOTA.find(o => o.id === id)?.o
 const dataBR = (iso: any) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '—');
 const SITUACAO = { rascunho: { rotulo: 'Rascunho', familia: 'atencao' }, aprovada: { rotulo: 'Vigente', familia: 'ok' }, substituida: { rotulo: 'Substituída', familia: 'neutro' } };
 
-const Campo = ({ id, rotulo, largo, dica, children }) => (
+const Campo = ({ id, rotulo, largo = false, dica = undefined, children }: { id: string; rotulo: string; largo?: boolean; dica?: string; children?: any }) => (
   <div className={'acn-fcad-campo' + (largo ? ' acn-fcad-largo' : '')}>
     <label className="acn-label" htmlFor={id}>{rotulo}</label>{children}{dica && <p className="acn-fcad-dica">{dica}</p>}
   </div>
@@ -116,7 +116,7 @@ function Simulador({ regras, emitentes, versao }) {
   const set = (k: string, v: string) => setCtx(c => ({ ...c, [k]: v }));
   const escolha = useMemo(() => escolherRegra({ ...ctx, origem_fiscal: ctx.origem_fiscal === '' ? null : Number(ctx.origem_fiscal), monofasico: ctx.monofasico || null }, regras), [ctx, regras]);
   const r = escolha.regra;
-  const familia = { achou: escolha.confirmada ? 'ok' : 'atencao', sem_regra: 'neutro', conflito: 'erro', faltam_dados: 'atencao' }[escolha.situacao];
+  const familia = { achou: escolha.confirmada ? 'ok' : 'atencao', sem_regra: 'neutro', conflito: 'erro', faltam_dados: 'atencao' }[escolha.situacao] as Familia;
   const rotulo = { achou: escolha.confirmada ? 'Achou a regra' : 'Achou, mas a confirmar', sem_regra: 'Sem regra', conflito: 'Regras que se contradizem', faltam_dados: 'Faltam dados' }[escolha.situacao];
   return (
     <div>
@@ -159,7 +159,7 @@ export default function FiscalRegrasTela({ currentUser }) {
   const [escolhida, setEscolhida] = useState<string | null>(null);
   const [rg, setRg] = useState({ id: null, regras: [], base: null, erro: '', lendo: false });
   const [janela, setJanela] = useState<any>(null);   // { regra } (regra null = nova)
-  const [aviso, setAviso] = useState<{ tom: string; texto: string } | null>(null);
+  const [aviso, setAviso] = useState<{ tom: Tom; texto: string } | null>(null);
   const [ocupado, setOcupado] = useState(false);
 
   const lerVersoes = useCallback(async (manter?: string) => {

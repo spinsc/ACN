@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // VendasTelecomTab — a aba "Vendas" do Telecom (pedido do usuário em 03/11/2026, Fatia 1)
 //
@@ -12,7 +11,7 @@ import { supabase } from './supabaseClient';
 import { useAbaNoEndereco } from './AbaNoEndereco';   // 26/11/2026 (Fase 5, parte 2): a visão tem endereço (#/<tela>/<visão>)
 import { lerPaginado } from './LerPaginado';
 import { logChange } from './AuditSystem';
-import { mostrarAviso, confirmar } from './Feedback';
+import { mostrarAviso, confirmar, type Tom } from './Feedback';
 import { CampoTelefone } from './CampoTelefone';
 import NovaOpOsModal from './NovaOpOsModal';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
@@ -523,7 +522,7 @@ function JanelaEnvioDaProposta({ card, currentUser, umaVez, estagioEnviadoId, no
     if (!estagioEnviadoId) { mostrarAviso('Não encontrei a etapa Enviado do funil. Feche e abra a aba de novo.', 'erro'); return; }
     const numero = pvDe(pv);
     setSalvando(true);
-    const parar = (m: string, tom = 'erro') => { setSalvando(false); mostrarAviso(m, tom); };
+    const parar = (m: string, tom: Tom = 'erro') => { setSalvando(false); mostrarAviso(m, tom); };
     if (!podeAlterarNumeroOplPv(currentUser)) {
       const { data: gravado, error } = await supabase.from('crm_oportunidades').select('numero_pv').eq('id', card.id).maybeSingle();
       if (error) return parar('Não foi possível conferir o PV gravado: ' + error.message);

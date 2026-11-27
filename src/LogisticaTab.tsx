@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { supabase } from './supabaseClient';
 import { anexarValoresDosPedidos } from './PedidoValores';
 import { anexarValoresDosFretes, anexarValoresDoFrete, anexarValoresDasCotacoesDeFrete, anexarValoresDasAprovacoesDeFrete, valorDaCotacaoOuNulo, AVISO_SEM_VALOR_DO_FRETE } from './FreteValores';
@@ -94,7 +93,7 @@ function RelatorioLogistica() {
   const saldoQtd = somaQtd(recebimentos) - somaQtd(envios);
 
   // Agrupado por tipo de mercadoria
-  const porMercadoria = dados.reduce((acc,m) => {
+  const porMercadoria: Record<string, any> = dados.reduce((acc: Record<string, any>, m) => {
     const k = m.tipo_mercadoria || 'Outros';
     if (!acc[k]) acc[k] = { in:0, out:0, transf:0, qtdIn:0, qtdOut:0 };
     if (m.tipo === 'Recebimento')       { acc[k].in++;    acc[k].qtdIn  += Number(m.quantidade)||0; }
@@ -2015,7 +2014,7 @@ export default function LogisticaTab({ currentUser }) {
   const [modalDetalhes, setModalDetalhes] = useState(null);
   const fileRef = useRef(null);
 
-  const carregarScript = (url) => new Promise((res, rej) => {
+  const carregarScript = (url) => new Promise<any>((res: (v?: any) => void, rej) => {
     if (document.querySelector(`script[src="${url}"]`)) { res(); return; }
     const s = document.createElement('script'); s.src = url;
     s.onload = res; s.onerror = rej;

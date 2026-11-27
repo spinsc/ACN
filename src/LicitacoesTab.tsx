@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { confirmarRemocao } from './Feedback';
 import { useFiltroNoEndereco } from './FiltroNoEndereco';   // 26/11/2026 (Fase 5, parte 3): o filtro tem endereço (#/<tela>?filtro=valor)
@@ -25,7 +24,7 @@ import { hidratarImagens, limparParaGravar, enviarImagemDeTexto, HtmlComImagens 
 import { CampoTelefone } from './CampoTelefone';
 import { conferirContatoDeLicitacao, licitacaoTemContato, mensagemContatoDaLicitacao, mensagemLicitacaoSemContato, lerContatosDaLicitacao, STATUS_QUE_NAO_PEDEM_CONTATO } from './ContatoObrigatorio';
 import { podeExcluirLicitacao, bloqueiosDeExclusao } from './ExclusaoDeCard';
-import { CabecalhoTela, Botao, Chips, Selo, Faixa, Abas, diaISO, SelectMultiplo } from './Interface';
+import { CabecalhoTela, Botao, Chips, Selo, Faixa, Abas, diaISO, SelectMultiplo, type Familia } from './Interface';
 import { podeEditarAtualizacao } from './utils/permissoes';
 import { MarcaAtualizacaoEditada } from './AtualizacaoEditavel';
 import Icone from './Icone';
@@ -52,7 +51,7 @@ const STATUS_LIST = ['Aberta','Em Andamento','Vencida','Finalizada','Perdida','D
 const MARCADORES = ['Em Recurso','Em Defesa','Impugnado','Cadastrado','Pendente','Pegar ATA','Esclarecimento','Arrematado','Perdida'];
 // Marcadores da disputa em andamento: não mudam o status da licitação. "Perdida" aqui
 // é estar perdendo no lance com a disputa ainda aberta (o status Perdida é o resultado).
-const FAMILIA_MARCADOR: Record<string, string> = { Esclarecimento: 'info', Arrematado: 'ok', Perdida: 'atencao' };
+const FAMILIA_MARCADOR: Record<string, Familia> = { Esclarecimento: 'info', Arrematado: 'ok', Perdida: 'atencao' };
 // Termômetro da proposta — mesmas faixas e cores do Comercial/CRM
 const TEMPERATURAS = [
   { v: 'frio',   label: 'Frio',   emoji: '🧊' },
@@ -2436,7 +2435,7 @@ function ModalNova({ currentUser, onClose, onSaved }) {
   const [form, setForm] = useState({ ...LICIT_VAZIO });
   const [salvando, setSalvando] = useState(false);
   const emAcao = useRef(false);   // 7.61: o clique duplo criava a licitação duas vezes
-  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+  const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
   // 26/10/2026 (pedido do usuário): o contato do cliente é obrigatório já na abertura — nome e telefone ou e-mail; vira o primeiro item de "Contatos do processo"
   const [contato, setContato] = useState({ nome: '', telefone: '', email: '' });
   const setC = (k: string, v: string) => setContato(c => ({ ...c, [k]: v }));
@@ -2586,7 +2585,7 @@ function ModalNova({ currentUser, onClose, onSaved }) {
 // CARD DE LICITAÇÃO
 // ─────────────────────────────────────────────────────────────────────────────
 // Família de cor de cada status — o card da lista e o relatório por status usam a mesma
-const FAMILIA_STATUS_LICIT: Record<string, string> = { 'Aberta':'info', 'Em Andamento':'info', 'Vencida':'ok', 'Finalizada':'ok', 'Perdida':'erro', 'Descartada':'neutro', 'Suspenso':'atencao' };
+const FAMILIA_STATUS_LICIT: Record<string, Familia> = { 'Aberta':'info', 'Em Andamento':'info', 'Vencida':'ok', 'Finalizada':'ok', 'Perdida':'erro', 'Descartada':'neutro', 'Suspenso':'atencao' };
 
 function LicitCard({ l, onClick, unread = false, markup = undefined }) {
   const dias = diasRestantes(l.data_disputa);
@@ -2662,7 +2661,7 @@ const GRUPOS_RELATORIO = [
 function RelatorioStatus({ licitacoes, loading, onOpenLicit, markupPorLicit = {} }) {
   const [anoFiltro, setAnoFiltro] = useState('');
 
-  const anos = [...new Set(
+  const anos = [...new Set<number>(
     licitacoes.map(l => l.data_disputa ? new Date(l.data_disputa).getFullYear() : null).filter(Boolean)
   )].sort((a,b) => b - a);
 

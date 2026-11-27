@@ -194,7 +194,7 @@ export function MenuAcoes({ itens, rotulo = 'Mais ações', pequeno = true }: { 
 }
 
 // ── Faixa de alerta em uma linha, com botão direto ────────────────────────────
-type Tom = 'erro' | 'atencao' | 'info' | 'ok' | 'marca';
+export type Tom = 'erro' | 'atencao' | 'info' | 'ok' | 'marca';
 const ICONE_TOM: Record<Tom, string> = { erro: mdiAlertCircleOutline, atencao: mdiAlertOutline, info: mdiInformationOutline, ok: mdiCheckCircleOutline, marca: mdiInformationOutline };
 export function Faixa({ tom = 'info', icone, children, acao }: { tom?: Tom; icone?: string; children: React.ReactNode; acao?: React.ReactNode }) {
   return (

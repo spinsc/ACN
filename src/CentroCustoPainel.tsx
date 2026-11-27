@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // PAINEL DO CENTRO DE CUSTO (Etapa 15b do ux-fluxo, 05/10/2026)
 //
@@ -26,7 +25,7 @@ import { anexarValoresDosPedidos } from './PedidoValores';
 import { anexarValoresDoFaturamento } from './FreteValores';
 import { lerPaginado } from './LerPaginado';
 import Icone from './Icone';
-import { Botao, Selo, Faixa, diaBR, diaISO } from './Interface';
+import { Botao, Selo, Faixa, diaBR, diaISO, type Familia } from './Interface';
 import { idsComDescendentes, orcamentoDoCentro, foraDaVigencia, ordenarArvore } from './CentroCustoShared';
 import { abrirVinculo } from './VinculoPicker';
 import { baixarPlanilha } from './ExportarPlanilha';
@@ -174,7 +173,7 @@ export function faixaDoConsumo(usado: number, orcado: number): 'sem' | 'ok' | 'a
   if (u * 100 >= o * 80) return 'atencao';
   return 'ok';
 }
-const FAMILIA_FAIXA: Record<string, string> = { sem: 'neutro', ok: 'ok', atencao: 'atencao', estouro: 'erro' };
+const FAMILIA_FAIXA: Record<string, Familia> = { sem: 'neutro', ok: 'ok', atencao: 'atencao', estouro: 'erro' };
 
 // ─── COMPARATIVO, CUSTO POR OP E PLANILHA (Etapa 15e, 05/10/2026) ──────────────
 /** O gasto (realizado + comprometido) de um mês de um ano, com a subárvore do centro. O previsto fica de fora, como no saldo. */
@@ -230,7 +229,7 @@ export function agruparPorOp(itens: any[]) {
 }
 
 /** Como o lançamento aparece na coluna "Situação" (a tela e a planilha usam a mesma frase). */
-export function situacaoDoItem(it: any): { texto: string; familia: string } {
+export function situacaoDoItem(it: any): { texto: string; familia: Familia } {
   if (it.previsto > 0) return { texto: `Previsto · ${it.status}`, familia: 'neutro' };
   if (it.comprometido > 0 && it.realizado > 0) return { texto: 'Parte paga', familia: 'info' };
   if (it.comprometido > 0) return { texto: it.tipo === 'contrato' ? 'Falta pagar' : 'Comprometido', familia: 'info' };

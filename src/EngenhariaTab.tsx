@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { supabase } from './supabaseClient';
 import { intervaloVisivel } from './IntervaloVisivel';
 import ResumoLoteOpl, { lotePedidoIgual } from './ResumoLoteOpl';
@@ -108,7 +107,7 @@ function InfoOplEngenharia({ o, colunas, className }) {
 export default function EngenhariaTab({ currentUser }) {
   // Etapa 18e (13/10/2026): a Engenharia só recebe pedidos de desenvolvimento, então a aba de abertura é a de Desenvolvimento
   // 26/11/2026 (Fase 4 do plano de endereços): a aba tem endereço (#/engenharia/estruturas…); Desenvolvimento é a padrão e fica sem nome na barra
-  const [abaEng, setAbaEng] = useAbaNoEndereco({ tela: 'engenharia' }) as [string, (v: any) => void];
+  const [abaEng, setAbaEng] = useAbaNoEndereco({ tela: 'engenharia' });
   // Fase 6 (26/11/2026): a demanda do Desenvolvimento (`#/engenharia/projeto/<código>`) mora na aba Desenvolvimento e a tarefa da Engenharia (`#/engenharia/tarefa/<código>`) na aba Horas/Tarefas:
   // com a tela já aberta em outra aba, o endereço troca para a aba dona, que lê o endereço e abre a janela.
   useEffect(() => {
@@ -151,7 +150,7 @@ export default function EngenhariaTab({ currentUser }) {
   // BOM estruturada (material por unidade) — obrigatória para liberar
   const [bomLinhas, setBomLinhas] = useState<any[]>([]);
   const [bomLote, setBomLote] = useState<any[]>([]);
-  const prepararBom = async (o: any, setter: (v: any[]) => void) => {
+  const prepararBom = async (o: any, setter: (v: any) => void) => {
     if ((o?.bom_itens || []).length) { setter(o.bom_itens); return; }
     setter([]);
     if ((o?.itens_vendidos || []).length) {
@@ -739,8 +738,8 @@ export default function EngenhariaTab({ currentUser }) {
                             {emAndamento && (
                               <>
                                 <BotaoPausar pausado={o.pausado}
-                                  onPausar={()=>pausarOpl(supabase,o).then(fetchAll)}
-                                  onRetomar={()=>retomarOpl(supabase,o).then(fetchAll)} />
+                                  onPausar={()=>pausarOpl(supabase,o).then(() => fetchAll())}
+                                  onRetomar={()=>retomarOpl(supabase,o).then(() => fetchAll())} />
                                 <Botao variante="primario" pequeno onClick={()=>abrirLiberarBom(o)}>
                                   LIBERAR BOM
                                 </Botao>

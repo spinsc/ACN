@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { supabase } from './supabaseClient';
 import { enviarArquivoPrivado } from './ArquivoPrivado';   // 26/11/2026 (plano do bucket privado, B2)
 import { LinkDeArquivo } from './ArquivoPrivadoTela';   // 26/11/2026 (plano do bucket privado, B2)
@@ -194,7 +193,7 @@ function RelatoriosSetor({ setor, cor }) {
   const concluidos = dados.filter(d => d.status === 'Concluido');
   const atrasados  = dados.filter(d => {
     if (d.status === 'Concluido') return false;
-    return (agora - new Date(d.data_abertura || 0)) / 3600000 > 48;
+    return (+agora - +new Date(d.data_abertura || 0)) / 3600000 > 48;
   });
 
   const tempoMedio = (() => {
@@ -202,8 +201,8 @@ function RelatoriosSetor({ setor, cor }) {
     return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
   })();
 
-  const porOpl  = dados.reduce((acc,d)=>{ const k=d.numero_opl||'Sem OP'; if(!acc[k]) acc[k]=[]; acc[k].push(d); return acc; }, {});
-  const porResp = dados.reduce((acc,d)=>{ const k=d.responsavel_nome||'Nao iniciada'; if(!acc[k]) acc[k]=[]; acc[k].push(d); return acc; }, {});
+  const porOpl: Record<string, any[]> = dados.reduce((acc: Record<string, any[]>, d)=>{ const k=d.numero_opl||'Sem OP'; if(!acc[k]) acc[k]=[]; acc[k].push(d); return acc; }, {} as Record<string, any[]>);
+  const porResp: Record<string, any[]> = dados.reduce((acc: Record<string, any[]>, d)=>{ const k=d.responsavel_nome||'Nao iniciada'; if(!acc[k]) acc[k]=[]; acc[k].push(d); return acc; }, {} as Record<string, any[]>);
   // Etapa 12e15 (06/10/2026): a cor de cada situação vem da família do guia, não de hex escrito à mão.
   const famS    = (s) => ({Pendente:'atencao','Em Andamento':'info',Concluido:'ok'})[s]||'neutro';
 
@@ -275,7 +274,7 @@ function RelatoriosSetor({ setor, cor }) {
                   <td className="acn-texto-medio">{d.descricao||'—'}</td>
                   <td><Selo familia="erro" ponto={false}>{d.status}</Selo></td>
                   <td>{d.responsavel_nome||'Nao iniciada'}</td>
-                  <td><strong className="acn-txt-erro">{((agora-new Date(d.data_abertura))/3600000).toFixed(0)}h</strong></td>
+                  <td><strong className="acn-txt-erro">{((+agora - +new Date(d.data_abertura))/3600000).toFixed(0)}h</strong></td>
                 </tr>
               ))}</tbody></table>
             )
@@ -359,7 +358,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
   const [loading, setLoading]         = useState(false);
   const [filtro, setFiltro]           = useState('Todos');
   const [mostrarConcluidas, setMostrarConcluidas] = useState(false);
-  const [abaAtiva, setAbaAtiva]       = useAbaNoEndereco({ tela: telaEndereco, inicial: () => (telaEndereco && registroDaTelaNoEndereco(enderecoAtual(), telaEndereco)?.tipo === 'ofi' ? 'demandas' : null) }) as [string, (v: any) => void];
+  const [abaAtiva, setAbaAtiva]       = useAbaNoEndereco({ tela: telaEndereco, inicial: () => (telaEndereco && registroDaTelaNoEndereco(enderecoAtual(), telaEndereco)?.tipo === 'ofi' ? 'demandas' : null) });
   // Fase 6 (26/11/2026): a OFI mora na fila da aba Demandas; com a tela já aberta (na aba Relatórios, por exemplo), um endereço de OFI troca para ela, que lê o endereço e abre a janela.
   useEffect(() => {
     if (!telaEndereco) return;
@@ -563,7 +562,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
     const logs = [...(d.logs_demanda||[]), { texto:`Concluído. Tempo útil: ${tempo.toFixed(1)}h`
       + (produzida != null ? ` Produzido: ${produzida} ${d.unidade||'un'} (pedido: ${d.quantidade||0}).` : ''),
       usuario:currentUser?.nome, hora:agora }];
-    const campos = { status:'Concluido', data_conclusao:agora, tempo_execucao_horas:tempo, logs_demanda:logs };
+    const campos: Record<string, any> = { status:'Concluido', data_conclusao:agora, tempo_execucao_horas:tempo, logs_demanda:logs };
     if (produzida != null) campos.quantidade_produzida = produzida;
     const { error: erroConc } = await supabase.from('demandas_setoriais').update(campos).eq('id',d.id);
     // 7.53: gravação recusada seguia como "Demanda concluída com N un" (e liberava a OS do SAC e o aviso ao PCP)

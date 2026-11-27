@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
@@ -239,7 +238,7 @@ function agruparPorCategoria(lista: any[]) {
 }
 
 function FiltroCategoria({ lista, valor, onChange }) {
-  const nomes = [...new Set(lista.map(categoriaDe))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const nomes = ([...new Set(lista.map(categoriaDe))] as string[]).sort((a, b) => a.localeCompare(b, 'pt-BR'));
   return (
     <select className="acn-input acn-fp-filtro" value={valor} onChange={e => onChange(e.target.value)}>
       <option value="">Todas as categorias ({lista.length})</option>
@@ -1921,7 +1920,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   // Novos estados
   // 26/11/2026 (Fase 4 do plano de endereços): as duas abas têm endereço (#/formacao-precos/precos-formados); Formação é a padrão. Embutida no CRM ou numa licitação a tela não tem
   // barra de abas nem endereço próprio (`tela` vazia = o estado fica só local). Trocar de aba não descarta a formação em edição: ela fica guardada e só a tela sai da vista.
-  const [abaAtiva, setAbaAtiva]             = useAbaNoEndereco({ tela: embutido ? '' : 'formacao_precos' }) as [string, (v: any) => void];
+  const [abaAtiva, setAbaAtiva]             = useAbaNoEndereco({ tela: embutido ? '' : 'formacao_precos' });
   // 26/11/2026 (plano de endereços e rotas, Fase 6; escolha do usuário: só o DETALHE de Preços Formados, o editor e o modo embutido ficam como estavam): o detalhe de uma formação tem endereço
   // próprio, `#/formacao-precos/preco/<código>` (F5, Voltar, Avançar e link colado abrem o mesmo detalhe; o vínculo de uma demanda avulsa, de 16/10/2026, abre por ele). O estado do detalhe mora na lista
   // (`AbaPrecoFormados`), então o gancho fica aqui, que sempre existe: ele lê a formação pelo código, manda a lista abrir (`abrirRegistro`) ou fechar (`pedirFechar`) e recebe de volta qual está aberto
@@ -3023,7 +3022,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
         ? ['Produto / Descrição', 'Marca', 'Qt', 'Valor Unit.', 'Valor Total', 'Imposto']
         : ['Produto / Descrição', 'Marca', 'Qt', 'Custo Unit.', 'Valor Unit.', 'Valor Total', 'DIFAL', 'Imposto', 'Lucro%']
       ];
-      const columnStyles = isVendedor
+      const columnStyles: Record<string, any> = isVendedor
         ? { 0: { cellWidth: 60 }, 4: { halign: 'right' }, 5: { halign: 'right' } }
         : { 0: { cellWidth: 50 }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right' } };
 

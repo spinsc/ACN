@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // RH › RELÓGIO PONTO (20/11/2026, pedido do usuário): o lugar onde o RH cuida do ponto da equipe — o que a Secullum registrou, o que precisa ser tratado,
 // as horas extras e quem está ligado a quem. Só leitura da cópia que a função `ponto-secullum` mantém (8h30, 20h30 e o botão "Atualizar ponto agora");
@@ -56,7 +55,7 @@ function usePontoDoMes(mes: string, versao: number) {
 }
 
 const LinkPessoa = ({ p, onClick }) => <button type="button" className="acn-ponto-link" onClick={onClick}>{nome(p)}</button>;
-const SecaoTitulo = ({ children, dica }) => <h3 className="acn-ponto-secao" title={dica}>{children}</h3>;
+const SecaoTitulo = ({ children, dica = undefined }: { children?: any; dica?: any }) => <h3 className="acn-ponto-secao" title={dica}>{children}</h3>;
 
 // ── Hoje ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 const PESO = { ainda_nao_bateu: 0, incompleto: 1, sem_batida: 1, falta: 1, sem_leitura: 1, trabalhando: 2, saiu: 3, completo: 3, justificado: 4, marcado: 5, sem_jornada: 6, sem_dados: 7 };
@@ -466,7 +465,7 @@ export default function RelogioPonto({ funcionarios, desligados, currentUser, on
   const mesAtual = primeiroDiaDoMes(hoje);
   const [perm, setPerm] = useState(null);
   // as partes do Relógio Ponto têm endereço (#/rh/ponto/mes); o pedido que vem de um aviso (visaoInicial) só vale quando o endereço não traz a parte
-  const [visao, setVisao] = useAbaNoEndereco({ tela: 'rh', nivel: 1, pai: 'ponto', inicial: () => visaoInicial }) as [string, (v: any) => void];
+  const [visao, setVisao] = useAbaNoEndereco({ tela: 'rh', nivel: 1, pai: 'ponto', inicial: () => visaoInicial });
   const [mes, setMes] = useState(mesAtual);
   const [meses, setMeses] = useState([]);
   const [aberta, setAberta] = useState(null);

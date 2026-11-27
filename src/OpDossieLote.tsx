@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // DOSSIÊ DO LOTE — o lote inteiro (A1704.2610/01 a /20) numa página só, com saída em PDF para imprimir.
 //
@@ -40,7 +39,7 @@ const TITULO_GRUPO = {
 const ORDEM_GRUPOS = ['demanda', 'compra', 'engenharia', 'ajuste', 'qualidade', 'frete', 'agendamento', 'anexo'];
 
 /** Lê todas as OPs do lote e o dossiê de cada uma (de 4 em 4, para não afogar o banco). `aoProgresso(feitas, total)` avisa a tela. */
-export async function carregarLote(base, aoProgresso = () => {}) {
+export async function carregarLote(base, aoProgresso: (feitas: number, total: number) => void = () => {}) {
   const b = baseDoLote(base);
   // o próprio número do lote (OP sem sufixo) também entra, caso exista
   const [sufixadas, avulsa] = await Promise.all([
@@ -230,7 +229,7 @@ export async function montarPdfDossieLote(dados, { comHistorico = true, verValor
 
 // ── Tela ─────────────────────────────────────────────────────────────────────
 // 12e77 (25/11/2026): os 42 estilos pintados à mão viraram classes `acn-dlote-*` (design.css); as tabelas seguem com a regra global de tabela (cabeçalho, margens e letra), só a largura mínima é daqui.
-const Secao = ({ titulo, tom, children }) => (
+const Secao = ({ titulo, tom = undefined, children }: { titulo: any; tom?: any; children?: any }) => (
   <div className="acn-dlote-sec" data-tom={tom}>
     <div className="acn-dlote-sec-titulo">{titulo}</div>
     {children}

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // VIAGENS ↔ OS (pedido do usuário em 05/11/2026)
 //
@@ -11,7 +10,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React from 'react';
 import { supabase } from './supabaseClient';
-import { Botao, Selo, Faixa } from './Interface';
+import { Botao, Selo, Faixa, type Familia } from './Interface';
 import Icone from './Icone';
 import { gerarPdfDaOS } from './SacImpressaoOS';
 import { htmlDaFicha } from './ViagemFicha';
@@ -103,7 +102,7 @@ export function imprimirOs(os: any) {
   gerarPdfDaOS(os, { [os.status]: '#334155' });
 }
 
-const SELO_FAMILIA: Record<string, string> = { 'Concluído': 'ok', 'Entregue': 'ok', 'Cancelada': 'neutro', 'Reprovado': 'erro' };
+const SELO_FAMILIA: Record<string, Familia> = { 'Concluído': 'ok', 'Entregue': 'ok', 'Cancelada': 'neutro', 'Reprovado': 'erro' };
 
 /** O quadro "OS de atendimento" da janela da viagem: as OS ligadas, imprimir, abrir no SAC e gerar uma OS nova. */
 export function OsDaViagem({ v, currentUser, podeGerar, aoGerar, aoAbrir, osLida, erroLeitura, carregando }: any) {

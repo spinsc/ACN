@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // LANÇAMENTO DE DESPESA DO CENTRO DE CUSTO — mais completo (Etapa 15d do ux-fluxo, 05/10/2026)
 //

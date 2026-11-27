@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // PENDÊNCIAS DE FABRICAÇÃO E COMPRA — o que segura a OP e como ela se libera
 //
@@ -149,7 +148,7 @@ async function marcarEtapa(op, vinculo, etapa, currentUser, onFeito) {
 // ── Checklist discreto ───────────────────────────────────────────────────────
 // 12e53 (09/10/2026): só aparência — a cor (âmbar enquanto falta, verde quando fecha) mora no design.css por [data-pnd]; a barra de andamento
 // passou a ser um <progress> (antes era uma div com a largura escrita no código)
-const Passo = ({ ok, texto, quem }) => (
+const Passo = ({ ok, texto, quem }: { ok: any; texto: any; quem?: any }) => (
   <span title={quem ? `${quem.por} · ${new Date(quem.em).toLocaleString('pt-BR')}` : undefined}
     className={'acn-pnd-passo' + (ok ? ' ok' : '')}>
     <Icone path={ok ? mdiCheckboxMarkedOutline : mdiCheckboxBlankOutline} size={13} /> {texto}

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { departamentoPrincipal } from './RhDepartamentos';
 // ─────────────────────────────────────────────────────────────────────────────
 // DOCUMENTO DETALHADO DE COMISSÕES (pedido do usuário em 05/10/2026)

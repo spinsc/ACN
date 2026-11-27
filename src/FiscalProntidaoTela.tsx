@@ -1,9 +1,8 @@
-// @ts-nocheck
 // As peças de tela da prontidão da OP para virar nota e da nota guardada na OP (preparação do módulo fiscal, 26/11/2026). As regras estão em FiscalProntidao.ts e FiscalArquivo.ts, a leitura em
 // FiscalDados.ts. Só mostra: nada aqui grava. Leitura recusada nunca vira "pronta" nem "sem nota guardada": a tela diz que não conseguiu conferir.
 import React, { useState, useEffect, useMemo } from 'react';
 import './fiscal.css';
-import { Selo, Faixa, Botao, diaBR } from './Interface';
+import { Selo, Faixa, Botao, diaBR, type Familia } from './Interface';
 import { lerContextoDaProntidao, lerNotasDaOp, lerCatalogoCitado } from './FiscalDados';
 import { notasQueAOpPede, conferirNotasInformadas, ROTULO_DO_PEDIDO } from './FiscalTiposDeNota';
 import { prontidaoDaOp, oQueAsOpsCitam } from './FiscalProntidao';
@@ -11,7 +10,7 @@ import { canceladas, situacaoDaNota, notasDaOp, numerosDaNotaDaOp, ROTULO_DA_SIT
 import { podeVerArquivoFiscal } from './utils/permissoes';
 
 const ROTULO_DO_GRUPO = { empresa: 'Empresa', cliente: 'Cliente', item: 'Item' };
-const FAMILIA_DA_SITUACAO = { emitida: 'ok', cancelada: 'neutro', sem_protocolo: 'atencao', rejeitada: 'erro' };
+const FAMILIA_DA_SITUACAO: Record<string, Familia> = { emitida: 'ok', cancelada: 'neutro', sem_protocolo: 'atencao', rejeitada: 'erro' };
 
 /**
  * A conferência de uma lista de OPs. Lê UMA vez quando a lista (ou o que ela vende) muda: a tela do Faturamento reabre a lista de 30 em 30 s e isto não pode acompanhá-la.
@@ -48,7 +47,7 @@ export function SeloDoTipoDeNota({ op, catalogo }) {
 }
 
 /** O selo da linha: verde quando está pronta, âmbar com a conta do que falta. O clique abre o detalhe. */
-export function SeloDaProntidao({ p, onClick }) {
+export function SeloDaProntidao({ p, onClick }: { p: any; onClick?: any }) {
   if (!p) return null;
   const pronta = p.situacao === 'pronta';
   const dica = pronta
@@ -62,7 +61,7 @@ export function SeloDaProntidao({ p, onClick }) {
 }
 
 /** O detalhe: o que falta, por empresa, cliente e item, e o que foi conferido. Serve à janela do Faturamento e ao Dossiê. */
-export function DetalheDaProntidao({ p, aoIrAosCadastros }) {
+export function DetalheDaProntidao({ p, aoIrAosCadastros }: { p: any; aoIrAosCadastros?: any }) {
   if (!p) return null;
   return (
     <div className="acn-fcad-prontidao">

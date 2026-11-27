@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // PONTO (PLANO_PONTO_SECULLUM.md, 19/11/2026): o ponto dos CLT da Detech, vindo da Secullum (só leitura).
 //
@@ -170,7 +169,7 @@ function EquipeHoje({ versao, abrirPessoa }) {
 }
 
 // ── Resumo do mês e horas extras (a mesma leitura, duas tabelas) ──────────────────────────────────────────────────────────────────────────
-function EquipeNoMes({ mes, versao, abrirPessoa, soExtras }) {
+function EquipeNoMes({ mes, versao, abrirPessoa, soExtras = false }) {
   const [estado, setEstado] = useState({ carregando: true, erro: '', linhas: [] });
   useEffect(() => {
     let vivo = true;

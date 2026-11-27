@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // EsperaDeMaterial — um desenvolvimento da Engenharia que só pode começar quando chega o material de uma compra da OP
 // (pedido do usuário em 28/10/2026: o suporte da barra sinalizadora só é desenvolvido quando chega o rack de teto comprado e a adaptação o põe no lugar).
@@ -86,7 +85,7 @@ export function situacaoDaEspera(espera: any, pedidos: any[], chegadas: any[], l
 const COLUNAS_PEDIDO = 'id,numero_pedido,numero_oc,descricao_material,fornecedor,status_compra,quantidade,quantidade_comprada,itens,opl,vinculo_tipo,vinculo_id,data_prevista_recebimento,prazo_entrega,data_recebimento_real,data_conclusao,data_criacao,vencedoras,vencedora_id,tem_divergencia';
 
 export async function lerEsperaAgora(espera: any) {
-  const ids = [...new Set((espera?.itens || []).map((i: any) => String(i.pedido_id)))];
+  const ids = [...new Set<string>((espera?.itens || []).map((i: any) => String(i.pedido_id)))];
   if (!ids.length) return { pedidos: [], chegadas: [], entregas: [], erro: '' };
   const [a, b, c] = await Promise.all([
     supabase.from('pcp_pedidos_compra').select(COLUNAS_PEDIDO).in('id', ids),

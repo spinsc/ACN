@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // COLUNA DE KANBAN COM ROLAGEM
 // A coluna tem a altura de 10 cards. Passando disso ela ROLA — como no Trello,
@@ -34,7 +33,7 @@ export function useAlturaDeCards(quantosCabem = CARDS_VISIVEIS) {
   const medir = useCallback(() => {
     const el = ref.current;
     if (!el) return;
-    const filhos = Array.from(el.children);
+    const filhos = Array.from(el.children as HTMLCollectionOf<HTMLElement>);
     if (filhos.length <= quantosCabem) {
       setAltura(a => (a === null ? a : null));
       return;

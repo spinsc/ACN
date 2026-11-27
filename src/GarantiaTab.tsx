@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // ATENDIMENTO EM GARANTIA — aba "Garantia" do SAC (G1 do PLANO_GARANTIA.md, 19/10/2026): abertura da ficha, lista, detalhe com histórico, edição, cancelamento e reabertura.
 // As regras (campos obrigatórios, quem abre/vê/mexe, o que cada operação grava) estão em GarantiaModelo.ts. O número GAR-0001/2026 quem dá é o banco (`garantia_abrir`).
@@ -12,7 +11,7 @@ import { combinaBusca } from './SearchUtils';
 import Icone from './Icone';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { CampoTelefone } from './CampoTelefone';
-import { Botao, Chips, Faixa, Selo, hojeISO, diaBR } from './Interface';
+import { Botao, Chips, Faixa, Selo, hojeISO, diaBR, type Familia } from './Interface';
 import { SelectVeiculo } from './VeiculoCadastro';
 import { SecoesGarantia } from './GarantiaEtapas';
 import { avisosDaGravacao, descricaoDoAviso } from './GarantiaAvisos';
@@ -29,7 +28,7 @@ import { useRegistroNoEndereco, lerPorCodigo, copiarLinkDoRegistroComAviso } fro
 
 const TABELA = 'garantia_atendimentos';
 const fmtDtHr = (d: string) => (d ? new Date(d).toLocaleString('pt-BR') : '—');
-const FAMILIA_SITUACAO: Record<string, string> = { aberto: 'info', encerrado: 'ok', cancelado: 'neutro' };
+const FAMILIA_SITUACAO: Record<string, Familia> = { aberto: 'info', encerrado: 'ok', cancelado: 'neutro' };
 
 /** Manda os avisos de uma gravação para a caixa de Menções (o sino), levando direto à ficha (G5, 20/10/2026). Falha de aviso não desfaz a gravação: devolve a lista do que não foi possível avisar. */
 async function avisarGarantia(antes: any, depois: any, autor: any): Promise<string[]> {

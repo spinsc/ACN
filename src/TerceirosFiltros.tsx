@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Serviços de terceiros: a barra de filtros que vale no Quadro e na Lista (fatia T2 do PLANO_SERVICOS_TERCEIROS.md, 22/11/2026): os contadores de pendência (sem prestador, sem data,
 // atrasados e choque de data), a busca, o tipo, o prestador, quem pediu, o setor de quem pediu, o período do dia do serviço e o "ver" (ativos, cancelados ou todos).
 // As regras (quem passa em cada filtro e como se conta cada pendência) estão em TerceirosFluxo.ts.
@@ -16,7 +15,7 @@ export function BarraDeFiltros({ filtros, mudar, contagens, tipos, prestadores, 
     for (const s of servicos) if (s.solicitante_id && !m.has(s.solicitante_id)) m.set(s.solicitante_id, s.solicitante_nome || 'Sem nome');
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'));
   }, [servicos]);
-  const setores = useMemo(() => [...new Set(servicos.map(s => s.solicitante_perfil).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'pt-BR')), [servicos]);
+  const setores = useMemo(() => [...new Set<string>(servicos.map(s => s.solicitante_perfil).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'pt-BR')), [servicos]);
   const mexidos = filtrosMexidos(filtros);
 
   return (

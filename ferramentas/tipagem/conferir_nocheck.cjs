@@ -7,6 +7,8 @@
 //   - arquivo na lista que já NÃO tem a diretiva    = esqueceram de tirá-lo da lista: falha (a lista tem de contar a verdade).
 // Por que existe: o `tsc` e o `vite build` não reclamam de um `@ts-nocheck` novo, então sem esta trava a dívida voltaria sozinha.
 //
+// Desde 27/11/2026 (fim da etapa 2) a lista está VAZIA: a diretiva é proibida em src/. A trava segue valendo (arquivo com a diretiva = falha).
+//
 // uso (da raiz do projeto):  node ferramentas/tipagem/conferir_nocheck.cjs [--gravar]
 //   --gravar  reescreve a lista com o estado atual (só para usar depois de TIRAR a diretiva de arquivos; nunca para aceitar um novo).
 const fs = require('fs');

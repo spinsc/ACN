@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // ATENDIMENTO EM GARANTIA — peças em garantia (envio e retorno) e apontamentos do atendimento (G4 do PLANO_GARANTIA.md, 20/10/2026)
 //
@@ -11,14 +10,14 @@ import { lerValorDigitado } from './LerValor';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { confirmar, pedirTexto } from './Feedback';
 import Icone from './Icone';
-import { Botao, Selo, hojeISO, diaBR } from './Interface';
+import { Botao, Selo, hojeISO, diaBR, type Familia } from './Interface';
 import {
   SITUACOES_PECA, seguintesDaPeca, situacaoDaPeca, ultimoMovimento, pecasPendentes, adicionarPeca, moverPeca, desfazerMovimentoDaPeca, tirarPeca,
   salvarApontamentos, totaisDeApontamentos,
 } from './GarantiaModelo';
 import { mdiPlus, mdiClose } from '@mdi/js';
 
-const FAMILIA_PECA: Record<string, string> = { a_enviar: 'neutro', enviada: 'info', em_analise: 'atencao', retornou: 'ok', reposta: 'ok', descartada: 'neutro' };
+const FAMILIA_PECA: Record<string, Familia> = { a_enviar: 'neutro', enviada: 'info', em_analise: 'atencao', retornou: 'ok', reposta: 'ok', descartada: 'neutro' };
 const texto = (n: any) => (n === null || n === undefined ? '' : String(n).replace('.', ','));
 
 function Secao({ id, titulo, selo, children }: any) {

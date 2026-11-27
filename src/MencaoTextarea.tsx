@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // MencaoTextarea — textarea com autocomplete @usuário
 //
@@ -6,6 +5,7 @@
 // DROPDOWN FIXED: escapa de qualquer overflow:hidden nos containers pais
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from './supabaseClient';
 import { combinaBusca } from './SearchUtils';
 import Icone from './Icone';
@@ -348,7 +348,6 @@ export default function MencaoTextarea({ value, onChange, rows = 3, placeholder,
           );
           // Renderiza via portal para escapar de overflow:hidden
           try {
-            const { createPortal } = require('react-dom');
             return createPortal(el, document.body);
           } catch {
             return el; // fallback inline se portal falhar

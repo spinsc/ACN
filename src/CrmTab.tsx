@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { anexarValoresDasOps, anexarValoresDaOp } from './OpValores';
@@ -39,7 +38,7 @@ import AgendaWidget from './AgendaWidget';
 import { abrirVinculo, VinculoPicker } from './VinculoPicker';
 import { ModalSolicitarCompra } from './SolicitacaoCompra';
 import { useMarkupDaTela, FaixaDoMarkup, MarkupBadge, MarkupBarraDistribuicao, OPCOES_FAIXA_MARKUP, idFaixaMarkup, TIPOS_NEGOCIO_CRM, BANDA_MARKUP_PADRAO } from './MarkupTermometro';
-import { CabecalhoTela, Abas, Chips, Botao, MenuAcoes, Faixa, Selo, Tag, hojeISO } from './Interface';
+import { CabecalhoTela, Abas, Chips, Botao, MenuAcoes, Faixa, Selo, Tag, hojeISO, type Familia } from './Interface';
 import { lerEntregasDosPedidos, chegadaDoPedido, frasePorFornecedor, dataCurta } from './ComprasEntregas';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import Icone from './Icone';
@@ -312,7 +311,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   // ── estado principal ──
   // 26/11/2026 (Fase 4 do plano de endereços): as oito abas do CRM (Kanban… Contatos) são UMA barra só e têm endereço (#/crm/agenda…); Kanban é a padrão. `secaoCrm` e `abaInterna`
   // continuam existindo, mas derivados dessa aba: Contatos é a seção própria e as outras sete são o funil. Faturamentos só abre para quem tem a permissão.
-  const [abaCrm, setAbaCrm] = useAbaNoEndereco({ tela: 'crm', permitida: (a) => a !== 'faturamentos' || podeVerFaturamentos }) as [string, (v: any) => void];
+  const [abaCrm, setAbaCrm] = useAbaNoEndereco({ tela: 'crm', permitida: (a) => a !== 'faturamentos' || podeVerFaturamentos });
   const secaoCrm: 'funil'|'contatos' = abaCrm === 'contatos' ? 'contatos' : 'funil';
   const [funil, setFunil]           = useState<'licitacao'|'venda_direta'>('venda_direta');
   const [estagios, setEstagios]     = useState<any[]>([]);
@@ -610,7 +609,8 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   useEffect(() => {
     // Etapa 15a (05/10/2026): só os que recebem lançamento e estão na vigência (o código já gravado na OP continua aparecendo no campo)
     supabase.from('centros_custo').select('codigo,nome,ativo,recebe_lancamento,vigencia_inicio,vigencia_fim').eq('ativo', true).order('codigo')
-      .then(({ data }) => setCentrosCusto((data || []).filter(centroDisponivel)));
+      // 27/11/2026 (tipagem): o filter também passa o índice como 2º argumento (`hoje`), o que desliga a checagem de vigência — comportamento antigo mantido de propósito (ver o relato da etapa 2 da tipagem).
+      .then(({ data }) => setCentrosCusto((data || []).filter(centroDisponivel as (c: any) => boolean)));
   }, []);
 
   useEffect(() => {
@@ -3365,7 +3365,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
       {abaInterna === 'demandas' && <DemandaAvulsaPanel currentUser={currentUser} setor="Comercial" />}
       {abaInterna === 'opls' && (() => {
         // A família de cor de cada status da OP (Engenharia, PCP, produção, liberação, entrega...). O que não está aqui fica cinza.
-        const FAMILIA_STATUS_OPL: Record<string,string> = {
+        const FAMILIA_STATUS_OPL: Record<string, Familia> = {
           'Em Espera Engenharia':                        'marca',
           'Em Analise Engenharia':                       'marca',
           'Devolvida para Engenharia':                   'erro',

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // Painel "Metas KPI" do Admin — as metas de lead time de cada setor e o que foi realizado (12e86, 26/11/2026). Saiu do AdminTab.tsx já no padrão do design system (`Botao`,
 // `Faixa`, `Selo`, a tabela do guia, sem `style` solto) e com a mesma aparência da tabela "KPIs por setor" do Dashboard.
@@ -16,7 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from './supabaseClient';
 import { explicarErroDoBanco } from './ErroDoBanco';
 import { lerPaginado } from './LerPaginado';
-import { Botao, Faixa, Selo } from './Interface';
+import { Botao, Faixa, Selo, type Familia } from './Interface';
 
 // As mesmas metas do Dashboard (METRICAS_CONFIG, DashboardTab.tsx): mudar uma exige mudar as duas.
 const METRICAS = [
@@ -37,7 +36,7 @@ const SETOR_MAP = { CHICOTES: 'Chicotes', SERRALHERIA: 'Serralheria', LABORATORI
 
 const h = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' h';
 const media = (vals: number[]) => vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
-const situacao = (real: number | null, meta: number, tol: number) => {
+const situacao = (real: number | null, meta: number, tol: number): { rotulo: string; familia: Familia; critico: boolean } => {
   if (real == null) return { rotulo: 'Sem dados', familia: 'neutro', critico: false };
   if (real <= meta) return { rotulo: 'No prazo', familia: 'ok', critico: false };
   if (real <= tol)  return { rotulo: 'Atenção', familia: 'atencao', critico: false };

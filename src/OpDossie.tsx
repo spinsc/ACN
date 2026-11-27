@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // DOSSIÊ DA OP — tudo o que aconteceu e tudo o que está pendurado numa OP,
 // numa página só, com saída em PDF.
@@ -54,7 +53,7 @@ const GRUPOS = [
 const AVISO_INCOMPLETO = 'Este dossiê pode estar incompleto: o que não foi lido não aparece aqui, e isso não quer dizer que não exista.';
 export const frasePorFalhas = (falhas) => `Não foi possível ler: ${(falhas || []).join(', ')}. ${AVISO_INCOMPLETO}`;
 
-const Secao = ({ titulo, tom = 'ink', children, vazio }) => (
+const Secao = ({ titulo, tom = 'ink', children, vazio = undefined }: { titulo: any; tom?: string; children?: any; vazio?: any }) => (
   <div className="acn-dos-sec" data-tom={tom}>
     <div className="acn-dos-sec-titulo">{titulo}</div>
     {children || <div className="acn-dos-nada">{vazio || 'Nada registrado.'}</div>}

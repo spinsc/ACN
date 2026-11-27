@@ -1,10 +1,9 @@
-// @ts-nocheck
 // Cadastros fiscais › Tipos de nota (preparação do módulo fiscal, 27/11/2026): o mapa de onde nasce cada nota e a conferência das OPs que já têm nota (a nota informada bate com o que a OP vende?).
 // As regras estão em FiscalTiposDeNota.ts e a leitura em FiscalDados.ts. SÓ MOSTRA: nada aqui grava nem emite. Leitura recusada nunca vira "tudo confere".
 import React, { useMemo, useState } from 'react';
 import { mdiDownload, mdiMagnify } from '@mdi/js';
 import Icone from './Icone';
-import { Botao, Faixa, Selo, Chips } from './Interface';
+import { Botao, Faixa, Selo, Chips, type Familia } from './Interface';
 import { baixarPlanilha } from './ExportarPlanilha';
 import { combinaBusca } from './SearchUtils';
 import { lerOpsComNota } from './FiscalDados';
@@ -13,7 +12,7 @@ import './fiscal.css';
 
 const LIMITE_NA_TELA = 200;
 const ROTULO_SABE = { sim: 'Sim', em_parte: 'Em parte', nao: 'Ainda não' };
-const FAMILIA_SABE = { sim: 'ok', em_parte: 'atencao', nao: 'neutro' };
+const FAMILIA_SABE: Record<string, Familia> = { sim: 'ok', em_parte: 'atencao', nao: 'neutro' };
 
 export default function FiscalTiposDeNotaTela() {
   const [d, setD] = useState<any>({ lido: false, ops: [], catalogo: [], erro: '' });

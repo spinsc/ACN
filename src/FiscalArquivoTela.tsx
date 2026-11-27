@@ -1,4 +1,3 @@
-// @ts-nocheck
 // A aba "Notas emitidas" do Fiscal (preparação do módulo fiscal, 26/11/2026): o arquivo das notas que o Conferidor guardou. Acha a nota, mostra a situação (emitida ou cancelada),
 // liga à OP pelo número que o Fiscal digitou, vigia a numeração (buraco, repetida, inutilizada) e diz quais OPs ainda não têm o XML guardado.
 // As regras puras estão em FiscalArquivo.ts, a leitura em FiscalDados.ts e as tabelas em supabase/sql/fiscal_arquivo_de_notas.sql. Só leitura: nada aqui emite nota.
@@ -89,7 +88,7 @@ function NotaModal({ linha, eventos, emitentes, verValores, onClose }) {
 // ═══ A aba ════════════════════════════════════════════════════════════════════════════════════
 export default function FiscalArquivoTela({ currentUser, aoIrAoConferidor }) {
   const verValores = podeVerValores(currentUser);
-  const [visao, setVisao] = useAbaNoEndereco({ tela: 'fiscal', nivel: 1, pai: 'arquivo' }) as [string, (v: any) => void];
+  const [visao, setVisao] = useAbaNoEndereco({ tela: 'fiscal', nivel: 1, pai: 'arquivo' });
   const [d, setD] = useState<any>(null);
   const [emitentes, setEmitentes] = useState<any[]>([]);
   const [erroEmit, setErroEmit] = useState('');
@@ -115,9 +114,9 @@ export default function FiscalArquivoTela({ currentUser, aoIrAoConferidor }) {
     n, sit: situacaoDaNota(n, canc), valor: d.valores.get(n.chave), ops: opsDaNota(n, d.ops, codigos),
     empresa: codigos.get(soDigitos(n.emitente_cnpj)) || formatarDocumento(n.emitente_cnpj),
   })), [d, canc, codigos]);
-  const empresas = useMemo(() => [...new Set(linhas.map(l => l.empresa))].sort(), [linhas]);
-  const anos = useMemo(() => [...new Set(linhas.map(l => (l.n.emissao_dia || '').slice(0, 4)).filter(Boolean))].sort().reverse(), [linhas]);
-  const series = useMemo(() => [...new Set(linhas.map(l => l.n.serie).filter(s => s != null))].sort((a, b) => a - b), [linhas]);
+  const empresas = useMemo(() => ([...new Set(linhas.map(l => l.empresa))] as string[]).sort(), [linhas]);
+  const anos = useMemo(() => ([...new Set(linhas.map(l => (l.n.emissao_dia || '').slice(0, 4)).filter(Boolean))] as string[]).sort().reverse(), [linhas]);
+  const series = useMemo(() => ([...new Set(linhas.map(l => l.n.serie).filter(s => s != null))] as number[]).sort((a, b) => a - b), [linhas]);
 
   const filtradas = useMemo(() => linhas.filter(l => {
     if (empresa && l.empresa !== empresa) return false;
@@ -143,7 +142,7 @@ export default function FiscalArquivoTela({ currentUser, aoIrAoConferidor }) {
 
   const erros = d ? Object.entries(d.erros).map(([k, v]) => `${{ notas: 'as notas', eventos: 'os cancelamentos e cartas', inutilizacoes: 'as inutilizações', valores: 'os valores', ops: 'as OPs' }[k] || k} (${v})`) : [];
 
-  const exportarNotas = () => baixarPlanilha('Notas_emitidas', [{ nome: 'Notas', colunas: [{ rotulo: 'Empresa' }, { rotulo: 'Número' }, { rotulo: 'Série' }, { rotulo: 'Emissão', largura: 12 }, { rotulo: 'Cliente', largura: 34 }, { rotulo: 'CNPJ/CPF', largura: 20 }, ...(verValores ? [{ rotulo: 'Valor', formato: 'moeda' }] : []), { rotulo: 'Situação', largura: 14 }, { rotulo: 'Bloqueios', formato: 'inteiro' }, { rotulo: 'Alertas', formato: 'inteiro' }, { rotulo: 'OP', largura: 20 }, { rotulo: 'Chave', largura: 46 }],
+  const exportarNotas = () => baixarPlanilha('Notas_emitidas', [{ nome: 'Notas', colunas: [{ rotulo: 'Empresa' }, { rotulo: 'Número' }, { rotulo: 'Série' }, { rotulo: 'Emissão', largura: 12 }, { rotulo: 'Cliente', largura: 34 }, { rotulo: 'CNPJ/CPF', largura: 20 }, ...(verValores ? [{ rotulo: 'Valor', formato: 'moeda' as const }] : []), { rotulo: 'Situação', largura: 14 }, { rotulo: 'Bloqueios', formato: 'inteiro' as const }, { rotulo: 'Alertas', formato: 'inteiro' as const }, { rotulo: 'OP', largura: 20 }, { rotulo: 'Chave', largura: 46 }],
     linhas: filtradas.map(l => [l.empresa, l.n.numero, l.n.serie, dataCurta(l.n.emissao_dia), l.n.destinatario_nome || '', l.n.destinatario_doc || '', ...(verValores ? [l.valor ?? 0] : []), ROTULO_DA_SITUACAO[l.sit], l.n.bloqueios, l.n.alertas, l.ops.map(o => o.opl).join(', '), l.n.chave]) }]);
   const exportarNumeracao = () => baixarPlanilha('Numeracao_das_notas', [{ nome: 'Numeração', colunas: [{ rotulo: 'Empresa' }, { rotulo: 'Série' }, { rotulo: 'Primeiro' }, { rotulo: 'Último' }, { rotulo: 'Guardadas' }, { rotulo: 'Inutilizadas' }, { rotulo: 'Faltam', formato: 'inteiro' }, { rotulo: 'Números que faltam', largura: 70 }],
     linhas: grupos.map(g => [nomeDaEmpresa(g.cnpj), g.serie, g.primeiro, g.ultimo, g.guardadas, g.inutilizadas, g.faltam.length, g.faixasQueFaltam.map(textoDaFaixa).join(', ')]) }]);

@@ -100,7 +100,7 @@ export function faltaApontar(op, situacao) {
 // ─────────────────────────────────────────────────────────────────────────────
 // A janela
 // ─────────────────────────────────────────────────────────────────────────────
-export function EquipeDaOpModal({ opl: oplProp, currentUser, aoFechar, aoMudar }) {
+export function EquipeDaOpModal({ opl: oplProp, currentUser, aoFechar, aoMudar }: { opl: any; currentUser: any; aoFechar: any; aoMudar?: any }) {
   const usuario = currentUser || lerUsuario();
   const { list: colaboradores } = useColaboradores();
   const [op, setOp] = useState(null);

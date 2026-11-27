@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { supabase } from './supabaseClient';
@@ -190,7 +189,7 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser, departamentos =
     ...Object.fromEntries(CAMPOS_EXTRAS_FUNC.map(k => [k, ''])),
     ...Object.fromEntries(CAMPOS_VALOR_FUNC.map(k => [k, ''])),
   };
-  const [form, setForm] = useState(func ? {
+  const [form, setForm] = useState<Record<string, any>>(func ? {
     nome: func.nome||'', email: func.email||'', cpf: func.cpf||'', cnpj: func.cnpj||'',
     cargo: func.cargo||'', cargo_ids: (func.cargo_ids || []) as string[], dep_ids: (func.departamento_ids || []) as string[],
     data_admissao: func.data_admissao||'',
@@ -1793,7 +1792,7 @@ function RelatorioTecnicos({ funcionarios }) {
         setErro('Não foi possível ler as OPs' + (e?.message ? ' (' + e.message + ')' : '') + '. Só as OS aparecem no relatório até a leitura funcionar.');
       }
 
-      const mapa = {};
+      const mapa: Record<string, any> = {};
       const addEntry = (nome, entry) => {
         if (!nome) return;
         const key = nome.trim().toLowerCase();
@@ -2500,7 +2499,7 @@ export default function RHTab({ currentUser }) {
     const pedida = (window as any).__acnDeepLink?.rhAba;
     if (pedida) { (window as any).__acnDeepLink = null; return ['geral','colaboradores','ponto','comissoes','relatorios','autorizacoes'].includes(pedida) ? pedida : 'geral'; }
     return 'geral';
-  } }) as [string, (v: any) => void];
+  } });
 
   const isAdmin = true; // acesso já controlado pelo dashboard (abas_permitidas)
   const podeAutorizar = currentUser?.perfil === 'Admin' || currentUser?.pode_autorizar_rh === true;

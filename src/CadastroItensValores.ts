@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Custo e markup do cadastro de itens moram numa tabela à parte (`cadastro_itens_valores`) desde a onda V1 do "ver valores no banco"
 // (decidido com o usuário em 24/11/2026; PLANO_VER_VALORES_NO_BANCO.md). O banco só entrega essa tabela a quem tem uma das abas de preço
 // (cadastro_itens, cadastro_produtos, formacao_precos, cotacoes, crm, licitacoes, telecom) e ao Admin; as outras telas seguem lendo `cadastro_itens`
@@ -32,7 +31,8 @@ export async function lerValoresDosItens(ids: string[]) {
     const { data, error } = await supabase.from('cadastro_itens_valores')
       .select('item_id,' + CAMPOS_DE_VALOR.join(',')).in('item_id', unicos.slice(i, i + 150));
     if (error) return { mapa, erro: error.message || 'sem resposta' };
-    for (const l of data || []) mapa.set(l.item_id, l);
+    // o select monta a lista de colunas em tempo de execução, então o tipo da linha não é conhecido pelo compilador
+    for (const l of (data || []) as any[]) mapa.set(l.item_id, l);
   }
   return { mapa, erro: '' };
 }

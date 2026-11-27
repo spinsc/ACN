@@ -10,7 +10,7 @@ Tudo aqui é só do navegador/código: **nada toca o banco**. Rode da raiz do pr
 | `node ferramentas/tipagem/listar_limpos.cjs saida.txt` | Diz quais arquivos da lista já passariam no `tsc` sem a diretiva (tira a diretiva de todos, roda o `tsc`, restaura tudo no fim). Rode com a árvore sem alterações em `src/` (demora ~40 s). `--rigor=noImplicitAny` ou `--rigor=strict` mede o rigor maior. |
 | `node ferramentas/tipagem/tirar_diretiva.cjs saida.txt` | Tira a diretiva dos arquivos da lista `saida.txt`, **prova que mais nada mudou em cada arquivo** e os tira de `nocheck.lista.txt`. Não faz commit. |
 
-Regras (decididas no plano): a lista **só encolhe**; arquivo novo nasce **sem** a diretiva; corrigir tipo é só anotar,
+**Estado em 27/11/2026: a lista está vazia (etapa 2 concluída); a diretiva é proibida em `src/`.** Regras (decididas no plano): a lista **só encolhe**; arquivo novo nasce **sem** a diretiva; corrigir tipo é só anotar,
 nunca mudar lógica; `any` explícito só com comentário dizendo o porquê.
 
 Para tirar a diretiva de mais arquivos (etapa 2 em diante): conserte o arquivo até o `npm run typecheck` ficar verde **sem** a diretiva,
