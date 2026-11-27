@@ -11,7 +11,7 @@ import { abrirDemandaPeloEndereco } from './DemandaNoEndereco';
 import { abrirOpPeloEndereco } from './OpNoEndereco';
 import { ehCodigoInterno } from './Rotas';
 
-export type AlvoDoAviso = { contexto: 'licitacao' | 'crm' | 'compra' | 'demanda_avulsa' | 'sac' | 'terceiro_servico' | 'op' | 'tarefa_financeiro'; id: string };
+export type AlvoDoAviso = { contexto: 'licitacao' | 'crm' | 'compra' | 'demanda_avulsa' | 'sac' | 'terceiro_servico' | 'op' | 'tarefa_financeiro' | 'desenvolvimento'; id: string };
 
 // Só entram as fontes cuja tela de origem comprovadamente abre o registro pelo id (licitação e CRM pelo `analise:abrir-origem`; compra,
 // demanda avulsa, OS do SAC e serviço de terceiro pelo `acn:abrir-registro`). As outras fontes do calendário (chegada de veículo, entrega de OP, vistoria,
@@ -29,6 +29,8 @@ const CONTEXTO_DA_FONTE: Record<string, AlvoDoAviso['contexto']> = {
   terceiro_servico: 'terceiro_servico',
   // 26/11/2026 (Fase 6): a tarefa do Financeiro tem endereço próprio (`#/financeiro/tarefa/<código>`); o `ref_id` da data é o id da tarefa
   tarefa_financeiro: 'tarefa_financeiro',
+  // 26/11/2026 (Fase 6): a data de uma etapa do Desenvolvimento guarda `<id da demanda>#<etapa>`; a demanda tem janela e endereço próprios (`#/engenharia/projeto/<código>`)
+  desenvolvimento_etapa: 'desenvolvimento',
   // 26/11/2026 (Fase 5, parte 4): a data de entrega e a de chegada do veículo guardam o código da OP, e a OP tem endereço próprio: abre por cima da tela de agora
   op_entrega: 'op',
   op_chegada_veiculo: 'op',

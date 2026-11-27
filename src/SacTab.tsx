@@ -30,6 +30,7 @@ import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { CampoTelefone } from './CampoTelefone';
 import { erroDeTelefone, telefoneParaMostrar } from './Telefone';
 import { gerarPdfDaOS } from './SacImpressaoOS';
+import { enviarArquivoPrivado } from './ArquivoPrivado';
 import { formularioDaCopiaDaOs, MAX_COPIAS_OS, LEVA_DA_OS, NAO_LEVA_DA_OS } from './CopiarOpOs';
 import { Abas, Botao, Selo, Chips, MenuAcoes, Faixa, hojeISO } from './Interface';
 import { mdiFormatListBulleted, mdiViewColumnOutline, mdiChevronUp, mdiChevronDown, mdiClipboardPlusOutline, mdiAccountWrenchOutline } from '@mdi/js';
@@ -151,10 +152,10 @@ async function uploadFoto(file: File, pasta: string): Promise<string | null> {
 async function uploadAssinatura(dataUrl: string, pasta: string): Promise<string | null> {
   const blob = await (await fetch(dataUrl)).blob();
   const path = `sac/${pasta}/assinatura_${Date.now()}.png`;
-  const { data, error } = await supabase.storage.from('acn-media').upload(path, blob, { contentType:'image/png', upsert: true });
-  if (error || !data) { registrarFalhaDeEnvio(error); return null; }
-  const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-  return pub?.publicUrl || null;
+  // 26/11/2026 (Etapa 17, onda 5b): a assinatura (nome e rubrica de quem aprovou ou recebeu) mora no bucket PRIVADO; as fotos seguem no público
+  const { valor, erro } = await enviarArquivoPrivado(path, blob, 'image/png');
+  if (erro || !valor) { registrarFalhaDeEnvio(erro); return null; }
+  return valor;
 }
 
 async function gerarNumeroOS(): Promise<string> {
