@@ -1355,7 +1355,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     } else if (r._tipo === 'produto') {
       irParaTela('cadastro_produtos');
     } else if (r._tipo === 'engenharia') {
-      if (irParaTela('engenharia')) setTimeout(() => window.dispatchEvent(new CustomEvent('engenharia:abrir-desenvolvimento', { detail: { termo: termoBusca } })), 400);
+      // 26/11/2026 (Fase 6): a demanda do Desenvolvimento abre pelo endereço (`#/engenharia/projeto/<código>`), numa janela por cima da lista; sai a espera de 0,4 s e o termo digitado na busca da aba
+      irParaRegistro('engenharia', 'projeto', String(r.id));
     }
   };
 

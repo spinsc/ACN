@@ -112,7 +112,7 @@ export function ProjetoDeOrigem({ g, currentUser, executar, ocupado }: any) {
                 <ul className="acn-gar-projeto-lista">{p.faria_diferente.map((t: string, i: number) => <li key={i}>{t}</li>)}</ul></div>
             )}
             <div className="acn-dev-acoes">
-              <Botao pequeno icone={mdiOpenInNew} onClick={() => irPara('engenharia', { nome: 'engenharia:abrir-desenvolvimento', detalhe: { termo: p.titulo } })}>Abrir o projeto</Botao>
+              <Botao pequeno icone={mdiOpenInNew} onClick={() => irPara('engenharia', undefined, { contexto: 'desenvolvimento', contextoId: String(p.id) })}>Abrir o projeto</Botao>
               {pode && pedindoPara !== p.id && (
                 <Botao pequeno icone={mdiPlus} disabled={!pode.ok || ocupado || gravando} title={pode.ok ? undefined : pode.motivo} onClick={() => setPedindoPara(p.id)}>Pedir mudança no projeto</Botao>
               )}

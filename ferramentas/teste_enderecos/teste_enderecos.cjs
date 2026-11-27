@@ -4013,6 +4013,187 @@ const marcarHistoricoInicial = (page) => page.evaluateOnNewDocument(() => { if (
     confere('nenhum aviso', al.length === 0, JSON.stringify(al));
   });
 
+  // ═════════ a demanda do Desenvolvimento (`#/engenharia/projeto/<código>`, numa JANELA própria por cima da lista da aba Desenvolvimento) — Fase 6 ═════════
+  // As demandas são as REAIS (19 no banco, leitura só): o código vem do cartão que a lista mostra. Só a leitura de uma demanda recusada é simulada.
+  const MSG_DD_NAO_ACHOU = 'Não foi possível abrir a demanda de desenvolvimento: não a encontrei, ou você não tem acesso a ela.';
+  const JDD = '[role="dialog"][aria-label="Demanda de desenvolvimento"]';
+  const estadoDD = (page) => page.evaluate((jd) => {
+    const aba = document.querySelector('.acn-main [role="tab"][aria-selected="true"]');
+    const j = document.querySelector(jd);
+    return {
+      hash: location.hash, titulo: document.title, historico: history.length, marca: !!(history.state && history.state.acn === 1),
+      janelas: document.querySelectorAll(jd).length, demanda: j ? (j.querySelector('.modal-title') || { innerText: null }).innerText : null,
+      abaAtiva: aba ? aba.innerText.replace(/\s+\d+$/, '').trim() : '', origem: location.origin + location.pathname,
+    };
+  }, JDD);
+  const esperarDD = (page, ms = 40000) => page.waitForSelector(JDD, { timeout: ms });
+  const esperarSemDD = (page, ms = 15000) => page.waitForFunction((s) => !document.querySelector(s), { timeout: ms }, JDD);
+  const fecharDD = (page) => page.evaluate((s) => { const b = [...document.querySelectorAll(s + ' .acn-modal-rodape button')].find(x => x.innerText.trim() === 'Fechar'); if (!b) throw new Error('não achei o botão Fechar da demanda'); b.click(); }, JDD);
+  const esperarDesfechoDD = (page, ms = 25000) => page.waitForFunction(() => !/^#\/engenharia\/projeto\//i.test(location.hash), { timeout: ms }).catch(() => {});
+  /** Abre a aba Desenvolvimento e devolve os códigos das demandas que a lista mostra (dado real, só leitura). */
+  const idsDasDemandas = async (page) => {
+    await page.goto(BASE + '#/engenharia', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await page.waitForSelector('[id^="dev-demanda-"]', { timeout: 40000 }); await espera(900);
+    return page.evaluate(() => [...document.querySelectorAll('[id^="dev-demanda-"]')].map(x => x.id.replace('dev-demanda-', '')));
+  };
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C102 Demanda do Desenvolvimento: o botão "Abrir em janela" escreve o endereço; Voltar fecha, Avançar reabre e o Fechar volta um passo', {}, async ({ page }) => {
+    const ids = await idsDasDemandas(page);
+    confere('a lista do Desenvolvimento tem demandas (dado real)', ids.length > 0, String(ids.length));
+    const antes = await estadoDD(page);
+    confere('a lista abre sem janela e sem endereço de registro', antes.janelas === 0 && antes.hash === '#/engenharia', JSON.stringify({ j: antes.janelas, h: antes.hash }));
+    await page.evaluate(() => { const b = [...document.querySelectorAll('.acn-dev-abrir button')].find(x => /Abrir em janela/.test(x.innerText)); b.click(); });
+    await esperarDD(page); await espera(900);
+    let e = await estadoDD(page);
+    const id = (e.hash.match(/^#\/engenharia\/projeto\/(.+)$/) || [])[1];
+    confere('o clique escreve o endereço da demanda aberta, um passo novo no histórico, e a janela é uma só', !!id && ids.includes(id) && e.janelas === 1 && e.historico === antes.historico + 1 && e.marca === true, JSON.stringify({ h: e.hash, j: e.janelas, hist: e.historico, antes: antes.historico }));
+    await page.goBack(); await esperarSemDD(page); await espera(900);
+    e = await estadoDD(page);
+    confere('o Voltar fecha a janela e volta a #/engenharia', e.janelas === 0 && e.hash === '#/engenharia', JSON.stringify({ j: e.janelas, h: e.hash }));
+    await page.goForward(); await esperarDD(page); await espera(900);
+    e = await estadoDD(page);
+    confere('o Avançar reabre a mesma demanda', e.janelas === 1 && e.hash === '#/engenharia/projeto/' + id, JSON.stringify({ j: e.janelas, h: e.hash }));
+    await fecharDD(page); await esperarSemDD(page); await espera(900);
+    e = await estadoDD(page);
+    confere('o Fechar tira o endereço da demanda (um passo atrás)', e.janelas === 0 && e.hash === '#/engenharia', JSON.stringify({ j: e.janelas, h: e.hash }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C103 Demanda do Desenvolvimento: link colado (primeira página) abre a janela; F5 reabre; o Fechar nunca sai do sistema', {}, async ({ page }) => {
+    const ids = await idsDasDemandas(page);
+    const end = '#/engenharia/projeto/' + ids[0];
+    await abrirComoLinkColado(page, end);
+    await esperarSistema(page); await esperarDD(page); await espera(900);
+    let e = await estadoDD(page);
+    const origem = e.origem, h0 = e.historico;
+    confere('o link abre a demanda certa, uma só, e o endereço continua o do link (não é reescrito)', e.hash === end && e.janelas === 1 && !!e.demanda && e.marca === false, JSON.stringify({ h: e.hash, j: e.janelas, d: e.demanda, m: e.marca }));
+    confere('a aba aberta é a do Desenvolvimento', /Desenvolvimento/i.test(e.abaAtiva), JSON.stringify({ a: e.abaAtiva }));
+    await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await esperarDD(page); await espera(900);
+    e = await estadoDD(page);
+    confere('F5 reabre a mesma demanda, no mesmo endereço', e.hash === end && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+    await fecharDD(page); await esperarSemDD(page); await espera(900);
+    e = await estadoDD(page);
+    confere('fechar troca o endereço pelo da tela, sem sair do sistema nem criar passo', e.hash === '#/engenharia' && e.janelas === 0 && e.origem === origem && e.historico === h0, JSON.stringify({ h: e.hash, j: e.janelas, o: e.origem, hist: e.historico, h0 }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  {
+    let modo = 'normal';
+    const lidas = [];
+    await cenario('C104 Demanda que não existe, que não é código e com a leitura recusada: UMA mensagem, sem janela, endereço limpo', {
+      simular: (url, r) => {
+        if (r.method() !== 'GET' || !url.includes('/rest/v1/engenharia_desenvolvimento?') || !url.includes('id=eq.')) return null;
+        lidas.push(1);
+        return modo === 'recusa' ? { status: 500, body: { message: 'erro simulado do banco' } } : null;
+      },
+    }, async ({ page }) => {
+      const ids = await idsDasDemandas(page);
+      const casos = [
+        ['não existe (código válido)', 'normal', UUID_INEXISTENTE, true, MSG_DD_NAO_ACHOU],
+        ['não é um código (texto)', 'normal', 'ZZNAOEXISTE9999', false, MSG_DD_NAO_ACHOU],
+        ['o banco recusa a leitura', 'recusa', ids[0], true, 'Não foi possível abrir a demanda de desenvolvimento: a leitura falhou (erro simulado do banco). Tente de novo.'],
+      ];
+      for (const [nome, m, codigo, leBanco, texto] of casos) {
+        modo = m; lidas.length = 0;
+        await LA(page).catch(() => {});
+        await abrirComoLinkColado(page, '#/engenharia/projeto/' + codigo);
+        await esperarSistema(page); await esperarDesfechoDD(page); await espera(800);
+        const e = await estadoDD(page);
+        const al = await A(page);
+        const msgs = al.filter(x => x.startsWith('Não foi possível abrir a demanda de desenvolvimento'));
+        confere(`demanda (${nome}): UMA mensagem, a certa`, msgs.length === 1 && msgs[0] === texto, JSON.stringify(al));
+        confere(`demanda (${nome}): nenhuma janela e o endereço volta ao da tela`, e.janelas === 0 && e.hash === '#/engenharia', JSON.stringify({ j: e.janelas, h: e.hash }));
+        confere(`demanda (${nome}): ${leBanco ? 'perguntou ao banco' : 'nem perguntou ao banco (um texto que não é código não existe)'}`, leBanco ? lidas.length >= 1 : lidas.length === 0, JSON.stringify(lidas));
+        await LA(page);
+        modo = 'normal';
+        await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await espera(1500);
+        const depois = await A(page);
+        confere(`demanda (${nome}): o F5 depois disso não avisa de novo`, depois.length === 0, JSON.stringify(depois));
+      }
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C105 Demanda do Desenvolvimento: "Copiar link"; aberta com outra aba da Engenharia aberta troca para o Desenvolvimento; Voltar e Avançar', {}, async ({ page }) => {
+    await instalarClipboardDeTeste(page);
+    const ids = await idsDasDemandas(page);
+    await page.goto(BASE + '#/engenharia/projeto/' + ids[0], { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarDD(page); await espera(900);
+    const SEL = JDD + ' button[aria-label="Copiar o link desta demanda"]';
+    const existe = await page.evaluate((s) => !!document.querySelector(s), SEL);
+    confere('a janela tem o botão "Copiar link"', existe, SEL);
+    if (existe) {
+      const clicar = async () => { await page.evaluate((s) => document.querySelector(s).click(), SEL); await espera(900); };
+      const completo = BASE + '#/engenharia/projeto/' + ids[0];
+      const ok = 'Link da demanda copiado. É só colar na mensagem ou no e-mail.';
+      await page.evaluate(() => { window.__copiado.length = 0; window.__modoCopia = 'moderna'; });
+      await LA(page); await clicar();
+      let al = await A(page);
+      const copiado = await page.evaluate(() => window.__copiado);
+      confere('copia o endereço COMPLETO (base atual + #/engenharia/projeto/<código>)', copiado.length === 1 && copiado[0] === completo, JSON.stringify(copiado) + ' esperado ' + completo);
+      confere('avisa que copiou', al.length === 1 && al[0] === ok, JSON.stringify(al));
+      await page.evaluate(() => { window.__modoCopia = 'falha'; });
+      await LA(page); await clicar();
+      al = await A(page);
+      confere('as duas formas falham: mensagem de erro que manda copiar da barra', al.length === 1 && al[0] === 'Não foi possível copiar o link da demanda. Copie o endereço que está na barra do navegador.', JSON.stringify(al));
+      const e = await estadoDD(page);
+      confere('copiar não mexeu no endereço nem fechou a janela', e.hash === '#/engenharia/projeto/' + ids[0] && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+    }
+    await LA(page);
+    // com a aba Estruturas aberta, o endereço de uma demanda troca para o Desenvolvimento e abre a janela; o Voltar volta às Estruturas
+    await page.goto(BASE + '#/engenharia/estruturas', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(2500);
+    let e = await estadoDD(page);
+    confere('a aba Estruturas abre sem janela (#/engenharia/estruturas)', e.hash === '#/engenharia/estruturas' && e.janelas === 0 && /Estruturas/i.test(e.abaAtiva), JSON.stringify({ h: e.hash, j: e.janelas, a: e.abaAtiva }));
+    await page.evaluate((h) => { location.hash = h; }, '#/engenharia/projeto/' + ids[0]);
+    await esperarDD(page); await espera(900);
+    e = await estadoDD(page);
+    confere('o endereço de uma demanda, com as Estruturas abertas, troca para o Desenvolvimento e abre a janela', e.janelas === 1 && /Desenvolvimento/i.test(e.abaAtiva) && e.hash === '#/engenharia/projeto/' + ids[0], JSON.stringify({ j: e.janelas, a: e.abaAtiva, h: e.hash }));
+    await page.goBack(); await esperarSemDD(page); await espera(900);
+    e = await estadoDD(page);
+    confere('o Voltar fecha a janela e volta à aba Estruturas', e.janelas === 0 && e.hash === '#/engenharia/estruturas' && /Estruturas/i.test(e.abaAtiva), JSON.stringify({ j: e.janelas, h: e.hash, a: e.abaAtiva }));
+    await page.goForward(); await esperarDD(page); await espera(900);
+    e = await estadoDD(page);
+    confere('o Avançar reabre a janela, na aba Desenvolvimento', e.janelas === 1 && e.hash === '#/engenharia/projeto/' + ids[0] && /Desenvolvimento/i.test(e.abaAtiva), JSON.stringify({ j: e.janelas, h: e.hash, a: e.abaAtiva }));
+    const al = await A(page);
+    confere('nenhum aviso no fim', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // os atalhos de dentro do sistema: a Menção da área livre e o "Abrir o projeto" da Garantia (recado interno) e a data de uma etapa no Calendário (botão "Abrir")
+  await cenario('C106 Demanda do Desenvolvimento: a Menção (recado) e o botão "Abrir" do Calendário abrem a janela pelo endereço, em UM passo', {
+    simular: (url, r) => (r.method() === 'POST' && /\/rpc\/calendario_eventos/.test(url) ? { status: 200, body: EVENTOS_CAL.lista } : null),
+  }, async ({ page }) => {
+    const ids = await idsDasDemandas(page);
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(2000);
+    const h0 = (await estadoDD(page)).historico;
+    await page.evaluate((id) => { window.__acnDeepLink = { contexto: 'desenvolvimento', contextoId: id }; window.dispatchEvent(new CustomEvent('acn:ir-para-aba', { detail: { aba: 'engenharia' } })); }, ids[0]);
+    await esperarDD(page); await espera(900);
+    let e = await estadoDD(page);
+    const recado = await page.evaluate(() => window.__acnDeepLink);
+    confere('a Menção abre a demanda pelo endereço (#/engenharia/projeto/<código>), na aba Desenvolvimento, uma janela só', e.hash === '#/engenharia/projeto/' + ids[0] && e.janelas === 1 && /Desenvolvimento/i.test(e.abaAtiva), JSON.stringify({ h: e.hash, j: e.janelas, a: e.abaAtiva }));
+    confere('UM passo novo no histórico (a tela e a demanda num passo só) e o recado foi consumido', e.historico === h0 + 1 && !recado, JSON.stringify({ h0, h1: e.historico, recado }));
+    // o Calendário: a data de uma etapa do Desenvolvimento (a chave da data é `<id da demanda>#<etapa>`)
+    EVENTOS_CAL.lista = [eventoDoCal('desenvolvimento_etapa', ids[1 % ids.length] + '#Concepção', 'ZZ vence a etapa do Desenvolvimento')];
+    await page.goto(BASE + '#/calendario', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(1800);
+    await abrirDoDia(page, 'ZZ vence a etapa do Desenvolvimento');
+    await esperarDD(page); await espera(900);
+    e = await estadoDD(page);
+    confere('o botão "Abrir" do Calendário abre a demanda pelo endereço, na aba Desenvolvimento', e.hash === '#/engenharia/projeto/' + ids[1 % ids.length] && e.janelas === 1 && /Desenvolvimento/i.test(e.abaAtiva), JSON.stringify({ h: e.hash, j: e.janelas, a: e.abaAtiva }));
+    await page.goBack(); await esperarSemDD(page); await espera(900);
+    e = await estadoDD(page);
+    confere('o Voltar fecha a janela e volta ao Calendário', e.janelas === 0 && e.hash === '#/calendario', JSON.stringify({ j: e.janelas, h: e.hash }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
   console.log('\n══════════ RESUMO ══════════');
   const falhas = resultados.filter(r => !r.ok);
   console.log(`${resultados.length - falhas.length} de ${resultados.length} conferências passaram; ${falhas.length} falharam`);

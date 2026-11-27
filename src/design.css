@@ -5964,6 +5964,9 @@ html body .acn-main .acn-dav-relogio { font-weight: 600; }
 .acn-dev-obs { font-size: 13px; padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1px solid var(--acn-line-soft); }
 .acn-dev-obs:last-child { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
 .acn-dev-acoes { display: flex; gap: 6px; flex-wrap: wrap; }
+/* Fase 6 (26/11/2026): a demanda do Desenvolvimento numa janela com endereço próprio, e o botão que a abre em cada cartão da lista */
+html body .modal-box.acn-modal-cadastro.acn-dev-jan { width: min(980px, 96vw); }
+.acn-dev-abrir { justify-content: flex-end; margin-bottom: 4px; }
 /* espera por material (28/10/2026): a caixa na demanda e a janela de escolha dos itens da compra */
 .acn-dev-espera-vazia { display: flex; }
 .acn-chegada-qtd { max-width: 90px; }
