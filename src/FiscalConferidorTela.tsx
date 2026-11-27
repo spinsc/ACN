@@ -1,13 +1,15 @@
 // @ts-nocheck
 // O Conferidor de XML do Fiscal (preparação do módulo fiscal, 26/11/2026): a pessoa solta os XMLs de notas já emitidas e a tela diz o que está errado, pelas regras da
-// especificação do Fiscal (FiscalXml.ts). SÓ LEITURA: os arquivos são lidos no próprio navegador; nada é salvo no banco nem enviado para fora.
+// especificação do Fiscal (FiscalXml.ts). Os arquivos são lidos no próprio navegador e NADA sai do computador a menos que a pessoa clique em "Guardar no arquivo" (aba Notas emitidas):
+// só aí as notas vão para o banco da empresa (fiscal_guardar), que não regrava o que já estava guardado.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { mdiMagnify, mdiDownload, mdiFileUploadOutline, mdiDeleteOutline } from '@mdi/js';
+import { mdiMagnify, mdiDownload, mdiFileUploadOutline, mdiDeleteOutline, mdiArchiveArrowDownOutline } from '@mdi/js';
 import Icone from './Icone';
 import { Botao, Faixa, Selo, Chips } from './Interface';
 import { combinaBusca } from './SearchUtils';
 import { baixarPlanilha } from './ExportarPlanilha';
-import { lerEmitentes } from './FiscalDados';
+import { lerEmitentes, guardarNoArquivo } from './FiscalDados';
+import { podeEditarCadastroFiscal, podeVerValores } from './utils/permissoes';
 import { lerArquivoFiscal, montarLote, conferirNota, conferirLote, chavesCanceladas, NOMES_DAS_REGRAS } from './FiscalXml';
 import './fiscal.css';
 
@@ -17,7 +19,7 @@ const BLOCO = 25;           // arquivos lidos por vez, para a tela não congelar
 const dinheiro = (v: number | null) => (v == null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
 const dataCurta = (iso: string) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); return m ? `${m[3]}/${m[2]}/${m[1]}` : (iso || '—'); };
 
-export default function FiscalConferidorTela() {
+export default function FiscalConferidorTela({ currentUser }) {
   const [arquivos, setArquivos] = useState<any[]>([]);       // o que foi lido (nota, evento, inutilização, outro)
   const [emitentes, setEmitentes] = useState<any[]>([]);
   const [erroEmit, setErroEmit] = useState('');
@@ -25,6 +27,8 @@ export default function FiscalConferidorTela() {
   const [sobre, setSobre] = useState(false);
   const [filtro, setFiltro] = useState('todas');
   const [busca, setBusca] = useState('');
+  const [guardando, setGuardando] = useState<{ feitas: number; total: number } | null>(null);
+  const [guardou, setGuardou] = useState<{ tom: string; texto: string } | null>(null);
   const entrada = useRef<HTMLInputElement>(null);
   const cancelar = useRef(false);
 
@@ -42,12 +46,13 @@ export default function FiscalConferidorTela() {
       if (cancelar.current) break;
       const bloco = xmls.slice(i, i + BLOCO);
       const textos = await Promise.all(bloco.map(f => f.text().then(t => ({ f, t })).catch(() => ({ f, t: null }))));
-      for (const { f, t } of textos) lidos.push(t == null ? { tipo: 'outro', arquivo: f.name, motivo: 'não foi possível ler o arquivo' } : lerArquivoFiscal(f.name, t));
+      for (const { f, t } of textos) lidos.push(t == null ? { tipo: 'outro', arquivo: f.name, motivo: 'não foi possível ler o arquivo' } : { ...lerArquivoFiscal(f.name, t), xml: t });   // o texto fica junto: é o que "Guardar no arquivo" envia
       setProgresso({ feitos: Math.min(i + BLOCO, xmls.length), total: xmls.length });
       await new Promise(r => setTimeout(r, 0));   // devolve a vez à tela entre um bloco e outro
     }
     setArquivos(a => [...a, ...lidos]);
     setProgresso(null);
+    setGuardou(null);
   };
 
   const soltar = (e: React.DragEvent) => { e.preventDefault(); setSobre(false); ler([...e.dataTransfer.files]); };
@@ -88,11 +93,24 @@ export default function FiscalConferidorTela() {
     ]);
   };
 
-  const limpar = () => { cancelar.current = true; setArquivos([]); setProgresso(null); setBusca(''); setFiltro('todas'); };
+  const limpar = () => { cancelar.current = true; setArquivos([]); setProgresso(null); setBusca(''); setFiltro('todas'); setGuardou(null); };
+
+  const podeGuardar = podeEditarCadastroFiscal(currentUser) && podeVerValores(currentUser);
+  const guardar = async () => {
+    if (guardando || !podeGuardar) return;
+    setGuardou(null); setGuardando({ feitas: 0, total: 1 });
+    const r = await guardarNoArquivo(lote, emitentes, currentUser, (feitas, total) => setGuardando({ feitas, total }));
+    setGuardando(null);
+    const t = r.totais;
+    const partes = [t.novas && `${t.novas} nota(s) nova(s)`, t.atualizadas && `${t.atualizadas} atualizada(s) com o protocolo`, t.repetidas && `${t.repetidas} já estava(m) guardada(s)`,
+      t.eventos_novos && `${t.eventos_novos} evento(s)`, t.inutilizacoes_novas && `${t.inutilizacoes_novas} inutilização(ões)`, t.semDado && `${t.semDado} arquivo(s) sem chave ou número que não puderam ser guardados`].filter(Boolean);
+    if (!r.ok) setGuardou({ tom: 'erro', texto: `${r.parcial ? 'A gravação parou no meio: ' : 'Falha ao guardar: '}${r.erro}${r.parcial ? ' O que já foi guardado fica; é só repetir (o que já está no arquivo não é regravado).' : ''} ${partes.length ? 'Até aqui: ' + partes.join(', ') + '.' : ''}` });
+    else setGuardou({ tom: t.semDado ? 'atencao' : 'ok', texto: partes.length ? 'Guardado no arquivo: ' + partes.join(', ') + '.' : 'Nada novo para guardar.' });
+  };
 
   return (
     <div>
-      <div className="acn-ajuda">Solte aqui os XMLs das notas já emitidas (de qualquer mês, vários de uma vez). A tela confere cada uma pelas regras do Fiscal (CFOP, ICMS, PIS/COFINS, chave, numeração…) e mostra o que está errado. <strong>É só leitura: os arquivos são lidos neste computador; nada é gravado nem enviado.</strong></div>
+      <div className="acn-ajuda">Solte aqui os XMLs das notas já emitidas (de qualquer mês, vários de uma vez). A tela confere cada uma pelas regras do Fiscal (CFOP, ICMS, PIS/COFINS, chave, numeração…) e mostra o que está errado. <strong>Os arquivos são lidos neste computador; nada é gravado nem enviado enquanto você não clicar em "Guardar no arquivo".</strong></div>
       {erroEmit && <Faixa tom="atencao">Não foi possível ler as empresas emitentes ({erroEmit}). A conferência do regime (CRT) da nota fica de fora.</Faixa>}
 
       <div className="acn-fcad-soltar" data-sobre={sobre ? '1' : '0'}
@@ -121,6 +139,18 @@ export default function FiscalConferidorTela() {
             <div className="acn-kpi"><span className="rot"><i data-acn-familia="erro" />Com bloqueio</span><span className="val acn-num">{resumo.comBloqueio}</span><span className="sub">a nota não deveria sair assim</span></div>
             <div className="acn-kpi"><span className="rot"><i data-acn-familia="atencao" />Só alerta</span><span className="val acn-num">{resumo.soAlerta}</span><span className="sub">conferir com o Fiscal</span></div>
           </div>
+
+          <div className="acn-fcad-guardar">
+            <div>
+              <strong>Guardar no arquivo da empresa</strong>
+              <p className="acn-fcad-dica">Grava {resumo.notas} nota(s), {resumo.eventos} evento(s) e {lote.inutilizacoes.length} inutilização(ões) no banco do sistema, para a aba Notas emitidas achar, ligar à OP e vigiar a numeração. O que já estava guardado não é regravado.</p>
+            </div>
+            <Botao variante="primario" icone={mdiArchiveArrowDownOutline} disabled={!podeGuardar || !!guardando || !!progresso || (!resumo.notas && !resumo.eventos && !lote.inutilizacoes.length)} onClick={guardar}>
+              {guardando ? `Guardando… ${guardando.feitas} de ${guardando.total}` : 'Guardar no arquivo'}
+            </Botao>
+          </div>
+          {!podeGuardar && <Faixa tom="info">Só guarda quem tem a aba Fiscal e vê valores (o XML traz os valores). Você pode conferir os arquivos normalmente.</Faixa>}
+          {guardou && <Faixa tom={guardou.tom}>{guardou.texto}</Faixa>}
 
           {lote.outros.length > 0 && (
             <Faixa tom="atencao">{lote.outros.length} arquivo(s) não foram lidos como nota, evento ou inutilização: {lote.outros.slice(0, 5).map(o => `${o.arquivo} (${o.motivo})`).join('; ')}{lote.outros.length > 5 ? '…' : ''}</Faixa>

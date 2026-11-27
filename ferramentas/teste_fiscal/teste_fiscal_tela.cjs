@@ -18,6 +18,25 @@ function nota({ cnpj = '73628307000105', crt = '3', serie = 3, numero = 100, idD
   return `<?xml version="1.0" encoding="UTF-8"?><nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00"><NFe><infNFe Id="NFe${chave}" versao="4.00"><ide><mod>55</mod><serie>${serie}</serie><nNF>${numero}</nNF><dhEmi>2026-11-20T10:00:00-03:00</dhEmi><natOp>VENDA DE MERCADORIA</natOp><idDest>${idDest}</idDest><indFinal>0</indFinal><finNFe>1</finNFe></ide><emit><CNPJ>${cnpj}</CNPJ><xNome>EMPRESA TESTE</xNome><enderEmit><UF>SC</UF></enderEmit><CRT>${crt}</CRT></emit><dest><CNPJ>05481897000136</CNPJ><xNome>CLIENTE INVENTADO</xNome><enderDest><UF>SC</UF></enderDest><IE>255123456</IE><indIEDest>1</indIEDest></dest>${det(1)}${det(2)}<total><ICMSTot><vNF>200.00</vNF></ICMSTot></total><pag><detPag><tPag>15</tPag><vPag>200.00</vPag></detPag></pag></infNFe></NFe><protNFe><infProt><cStat>100</cStat><chNFe>${chave}</chNFe></infProt></protNFe></nfeProc>`;
 }
 
+// ── o arquivo de notas SIMULADO (o banco real ainda não tem nota guardada): 4 notas, 1 cancelamento, 1 inutilização e 3 OPs ──
+const ACN = '73628307000105', DETECH = '33785289000150';
+const cabecalho = (cnpj, serie, numero, extra = {}) => ({ id: cnpj + serie + numero, chave: chaveDe(cnpj, serie, numero), emitente_cnpj: cnpj, emitente_nome: 'EMPRESA TESTE', modelo: '55', serie, numero, emissao_dia: '2026-11-20', destinatario_doc: '05481897000136', destinatario_nome: 'CLIENTE INVENTADO', destinatario_uf: 'SC', natureza: 'VENDA', fin_nfe: '1', autorizada: true, cstat: '100', qtd_itens: 2, bloqueios: 0, alertas: 0, regras: [], arquivo: 'x.xml', ...extra });
+const NOTAS = [cabecalho(ACN, 3, 100), cabecalho(ACN, 3, 102, { bloqueios: 1, regras: ['cfop_destino'] }), cabecalho(DETECH, 1, 1679, { autorizada: null, cstat: '' }), cabecalho(ACN, 3, 105)];
+const simularArquivo = (url) => {
+  const ok = (body) => ({ status: 200, body });
+  if (/\/rest\/v1\/fiscal_notas\?/.test(url)) return ok(NOTAS);
+  if (/\/rest\/v1\/fiscal_notas_valores\?/.test(url)) return ok(NOTAS.map(n => ({ chave: n.chave, valor_nf: '200.00' })));
+  if (/\/rest\/v1\/fiscal_eventos\?/.test(url)) return ok([{ chave: chaveDe(ACN, 3, 105), tp_evento: '110111', sequencia: 1, data_dia: '2026-11-21', texto: 'Erro de digitacao', cstat: '135', arquivo: 'e.xml' }]);
+  if (/\/rest\/v1\/fiscal_inutilizacoes\?/.test(url)) return ok([{ id: 'i1', cnpj: ACN, serie: 3, modelo: '55', de: 103, ate: 103, ano: '26', cstat: '102', arquivo: 'i.xml' }]);
+  if (/\/rest\/v1\/fiscal_arquivos\?/.test(url)) return ok({ xml: nota({ numero: 102, idDest: '2' }) });   // .maybeSingle() pede um objeto só
+  if (/\/rest\/v1\/oples\?.*numero_nf/.test(url)) return ok([{ opl: 'A1679.2611', numero_nf: '1679', faturamento_empresa: 'Detech', data_emissao_nf: null }, { opl: 'A9.2611', numero_nf: '100', faturamento_empresa: 'ACN', data_emissao_nf: null }, { opl: 'A8.2611', numero_nf: '555', faturamento_empresa: 'ACN', data_emissao_nf: null }]);
+  return null;
+};
+let modoDaGravacao = 'ok';
+const respostaDaGravacao = (url) => /rpc\/fiscal_guardar/.test(url)
+  ? (modoDaGravacao === 'ok' ? { status: 200, body: { novas: 1, atualizadas: 0, repetidas: 1, eventos_novos: 0, eventos_repetidos: 0, inutilizacoes_novas: 0, inutilizacoes_repetidas: 0 } } : { status: 400, body: { message: 'canceling statement due to statement timeout', code: '57014' } })
+  : null;
+
 const clicarTexto = (page, seletor, texto) => page.evaluate((s, t) => { const el = [...document.querySelectorAll(s)].find(e => (e.innerText || e.textContent || '').trim() === t || (e.getAttribute('aria-label') || '') === t); if (!el) return false; el.click(); return true; }, seletor, texto);
 const textoDaTela = (page) => page.evaluate(() => (document.querySelector('.acn-main') || document.body).innerText.replace(/\s+/g, ' ').trim());
 const semRolagemLateral = (page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
@@ -32,7 +51,7 @@ const confirmaDialogo = async (page) => { await page.waitForSelector('.acn-dialo
   fs.writeFileSync(arqs.errada, nota({ numero: 102, idDest: '2', cfop: '5102' }));   // interestadual (idDest 2) com CFOP de dentro do estado
   fs.writeFileSync(arqs.lixo, '<isto nao e uma nota>');
 
-  const ctx = await abrir({});
+  const ctx = await abrir({ simular: simularArquivo, escritaSimulada: (url) => respostaDaGravacao(url) });
   const { page, gravacoes, consoleErros, falhasDePagina } = ctx;
   try {
     // ═══ Cadastros: empresas ═══
@@ -138,7 +157,7 @@ const confirmaDialogo = async (page) => { await page.waitForSelector('.acn-dialo
     await esperarSistema(page);
     await page.waitForSelector('input[type="file"][aria-label="Escolher arquivos XML"]', { timeout: 20000 });
     t = await textoDaTela(page);
-    confere('conferidor: diz que é só leitura e que nada é gravado nem enviado', /só leitura/i.test(t) && /nada é gravado nem enviado/i.test(t));
+    confere('conferidor: diz que nada é gravado nem enviado enquanto não clicar em Guardar no arquivo', /nada é gravado nem enviado/i.test(t) && /Guardar no arquivo/.test(t));
     const antes5 = gravacoes.length;
     const entrada = await page.$('input[type="file"][aria-label="Escolher arquivos XML"]');
     await entrada.uploadFile(arqs.certa, arqs.errada, arqs.lixo);
@@ -161,8 +180,74 @@ const confirmaDialogo = async (page) => { await page.waitForSelector('.acn-dialo
     await espera(300);
     confere('conferidor: "Limpar" zera os arquivos', !/Arquivos lidos/.test(await textoDaTela(page)));
 
+    // ── Guardar no arquivo (a gravação é simulada: o teste vê o que SERIA enviado) ──
+    await page.goto(BASE + '#/fiscal/conferidor', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page);
+    await page.waitForSelector('input[type="file"][aria-label="Escolher arquivos XML"]', { timeout: 20000 });
+    const entrada2 = await page.$('input[type="file"][aria-label="Escolher arquivos XML"]');
+    await entrada2.uploadFile(arqs.certa, arqs.errada, arqs.lixo);
+    await page.waitForFunction(() => /Arquivos lidos\s*3/.test(document.body.innerText), { timeout: 15000 });
+    const botao = await page.evaluate(() => { const b = [...document.querySelectorAll('.acn-fcad-guardar button')].find(x => /Guardar no arquivo/.test(x.innerText)); return b ? { desligado: b.disabled } : null; });
+    confere('guardar: o botão existe e está ligado para quem tem a aba Fiscal e vê valores', !!botao && !botao.desligado, JSON.stringify(botao));
+    const antes6 = gravacoes.length;
+    await clicarTexto(page, '.acn-fcad-guardar button', 'Guardar no arquivo');
+    await page.waitForFunction(() => /Guardado no arquivo/.test(document.body.innerText), { timeout: 10000 });
+    const env = gravacoes.slice(antes6).filter(x => /rpc\/fiscal_guardar/.test(x.url));
+    confere('guardar: UMA chamada à função fiscal_guardar', env.length === 1, JSON.stringify(gravacoes.slice(antes6).map(x => x.url)));
+    const corpoG = JSON.parse(env[0].corpo || '{}');
+    confere('guardar: leva as 2 notas (a que não é nota fica de fora) com chave de 44 dígitos e o XML', corpoG.p_notas.length === 2 && corpoG.p_notas.every(n => /^\d{44}$/.test(n.chave) && n.xml && n.xml.includes('<nfeProc')), JSON.stringify(corpoG.p_notas.map(n => [n.chave && n.chave.length, !!n.xml])));
+    const errada = corpoG.p_notas.find(n => String(n.numero) === '102');
+    confere('guardar: a nota errada vai com o bloqueio contado e a regra', !!errada && errada.bloqueios >= 1 && errada.regras.includes('cfop_destino'), JSON.stringify(errada && [errada.bloqueios, errada.regras]));
+    confere('guardar: o valor, o dia da emissão e o CNPJ vão como a nota escreve', !!errada && errada.valor_nf === 200 && errada.emissao_dia === '2026-11-20' && errada.emitente_cnpj === ACN, JSON.stringify(errada && [errada.valor_nf, errada.emissao_dia]));
+    t = await textoDaTela(page);
+    confere('guardar: a resposta mostra o que entrou e o que já estava', /1 nota\(s\) nova\(s\)/.test(t) && /1 já estava/.test(t), t.slice(0, 500));
+    modoDaGravacao = 'erro';
+    await clicarTexto(page, '.acn-fcad-guardar button', 'Guardar no arquivo');
+    await page.waitForFunction(() => /Falha ao guardar/.test(document.body.innerText), { timeout: 10000 });
+    confere('guardar: falha do banco aparece em vermelho, em português, e não diz que guardou', !/Guardado no arquivo/.test(await textoDaTela(page)) && await page.evaluate(() => !!document.querySelector('.acn-faixa.tom-erro')));
+    modoDaGravacao = 'ok';
+
+    // ═══ Notas emitidas (o arquivo, com os dados simulados) ═══
+    await page.goto(BASE + '#/fiscal/arquivo', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page);
+    await page.waitForFunction(() => /Notas guardadas\s*4/.test(document.body.innerText), { timeout: 30000 });
+    t = await textoDaTela(page);
+    confere('arquivo: 4 notas guardadas, 1 cancelada', /Notas guardadas 4/.test(t) && /1 cancelada/.test(t), t.slice(0, 300));
+    confere('arquivo: 1 nota com bloqueio e 1 sem protocolo', /Com bloqueio 1/.test(t) && /Sem protocolo 1/.test(t));
+    const linhaCom = (re) => page.evaluate((r) => [...document.querySelectorAll('.acn-main table tbody tr')].map(tr => tr.innerText.replace(/\s+/g, ' ')).filter(x => new RegExp(r).test(x)), re);
+    confere('arquivo: a nota 1679 da DETECH aparece ligada à OP A1679.2611', (await linhaCom('^1679.*DETECH.*A1679\\.2611')).length === 1 || (await linhaCom('1679')).some(x => /A1679\.2611/.test(x) && /DETECH/.test(x)), JSON.stringify(await linhaCom('1679')));
+    confere('arquivo: a nota 100 da ACN fica com a OP A9.2611 e NÃO com a da DETECH', (await linhaCom('^100 ')).every(x => /A9\.2611/.test(x) && !/A1679/.test(x)) && (await linhaCom('^100 ')).length === 1, JSON.stringify(await linhaCom('^100 ')));
+    confere('arquivo: a 105 mostra "Cancelada"', (await linhaCom('^105 ')).some(x => /Cancelada/.test(x)), JSON.stringify(await linhaCom('^105 ')));
+    confere('arquivo: o valor aparece (a conta de teste vê valores)', /R\$\s?200,00/.test(t));
+    await page.evaluate(() => [...document.querySelectorAll('.acn-chips button')].find(x => x.innerText.trim().startsWith('Com bloqueio'))?.click());
+    await espera(300);
+    const so1 = await linhaCom('.');
+    confere('arquivo: o filtro "Com bloqueio" deixa só a nota 102', so1.length === 1 && /^102 /.test(so1[0]), JSON.stringify(so1));
+    await page.evaluate(() => [...document.querySelectorAll('.acn-chips button')].find(x => x.innerText.trim() === 'Todas')?.click());
+    await espera(300);
+    // abrir a nota 102: o XML guardado é lido e a conferência é refeita ao vivo
+    await page.evaluate(() => { const tr = [...document.querySelectorAll('.acn-main table tbody tr')].find(x => /^102 /.test(x.innerText.replace(/\s+/g, ' '))); [...tr.querySelectorAll('button')].find(b => b.innerText.trim() === 'Abrir').click(); });
+    await page.waitForSelector('.acn-fcad-box', { timeout: 8000 });
+    await page.waitForFunction(() => /Conferência/.test(document.querySelector('.acn-fcad-box').innerText) && !/Lendo o XML/.test(document.querySelector('.acn-fcad-box').innerText), { timeout: 8000 });
+    t = await page.evaluate(() => document.querySelector('.acn-fcad-box').innerText.replace(/\s+/g, ' '));
+    confere('arquivo: a janela da nota mostra a chave, o cliente e o achado do CFOP refeito sobre o XML', t.includes(chaveDe(ACN, 3, 102)) && /CLIENTE INVENTADO/.test(t) && /CFOP/i.test(t), t.slice(0, 600));
+    confere('arquivo: a janela oferece baixar o XML', /Baixar o XML/.test(t));
+    await page.evaluate(() => document.querySelector('.acn-fcad-box button[aria-label="Fechar"]').click());
+    // numeração: 100..105 na ACN série 3 = faltam 101 e 104 (a 103 foi inutilizada, a 102 e a 105 existem)
+    await page.evaluate(() => [...document.querySelectorAll('.acn-chips button')].find(x => x.innerText.trim().startsWith('Numeração'))?.click());
+    await page.waitForFunction(() => /Primeiro → último/i.test(document.body.innerText), { timeout: 8000 });
+    t = await textoDaTela(page);
+    confere('numeração: endereço da visão', (await page.evaluate(() => location.hash)) === '#/fiscal/arquivo/numeracao');
+    confere('numeração: ACN série 3 vai de 100 a 105 e faltam 101 e 104 (a 103 foi inutilizada)', /100 → 105/.test(t) && /2 número\(s\)/.test(t) && /101, 104/.test(t), t.slice(0, 500));
+    // OPs sem XML: a A8.2611 (nota 555) não tem XML; a A9 e a A1679 têm
+    await page.evaluate(() => [...document.querySelectorAll('.acn-chips button')].find(x => x.innerText.trim().startsWith('OPs sem XML'))?.click());
+    await page.waitForFunction(() => /Empresa que faturou/i.test(document.body.innerText), { timeout: 8000 });
+    t = await textoDaTela(page);
+    confere('OPs sem XML: só a A8.2611 aparece', /A8\.2611/.test(t) && !/A9\.2611/.test(t) && !/A1679\.2611/.test(t), t.slice(0, 400));
+    confere('OPs sem XML: endereço da visão', (await page.evaluate(() => location.hash)) === '#/fiscal/arquivo/sem-xml');
+
     // ═══ Celular ═══
-    for (const [rotulo, hash, esperar] of [['cadastros/empresas', '#/fiscal/cadastros', /DETECH/], ['cadastros/itens', '#/fiscal/cadastros/itens', /Itens ativos/], ['conferidor', '#/fiscal/conferidor', /Solte os arquivos/]]) {
+    for (const [rotulo, hash, esperar] of [['cadastros/empresas', '#/fiscal/cadastros', /DETECH/], ['cadastros/itens', '#/fiscal/cadastros/itens', /Itens ativos/], ['conferidor', '#/fiscal/conferidor', /Solte os arquivos/], ['arquivo/notas', '#/fiscal/arquivo', /Notas guardadas/], ['arquivo/numeracao', '#/fiscal/arquivo/numeracao', /Primeiro/]]) {
       await page.setViewport({ width: 390, height: 800, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
       await page.goto(BASE + hash, { waitUntil: 'domcontentloaded' });
       await esperarSistema(page);

@@ -5,10 +5,10 @@ Dois testes, os dois **sem gravar nada no banco** e **só com XML inventado** (n
 ## 1. As regras puras (sem navegador, sem banco)
 
 ```powershell
-node ferramentas/teste_fiscal/teste_fiscal.mjs     # 54 conferências em 26/11/2026
+node ferramentas/teste_fiscal/teste_fiscal.mjs     # 68 conferências em 26/11/2026
 ```
 
-Prova `src/FiscalRegras.ts` (cadastros: CNPJ/CPF, indicador da inscrição, CEST, origem, série nova ≠ série atual…) e `src/FiscalXml.ts` (o leitor de XML e as travas da especificação do Fiscal, cada uma nos dois sentidos: a nota certa passa limpa e a nota com o defeito plantado é pega). Roda direto no Node 24 (os dois arquivos não importam nada do projeto).
+Prova `src/FiscalArquivo.ts` (numeração, situação, ligação nota ↔ OP, o que vai ao banco), `src/FiscalRegras.ts` (cadastros: CNPJ/CPF, indicador da inscrição, CEST, origem, série nova ≠ série atual…) e `src/FiscalXml.ts` (o leitor de XML e as travas da especificação do Fiscal, cada uma nos dois sentidos: a nota certa passa limpa e a nota com o defeito plantado é pega). Roda direto no Node 24 (os dois arquivos não importam nada do projeto).
 
 ## 2. As telas no navegador (gravações bloqueadas)
 
@@ -18,9 +18,13 @@ Prova `src/FiscalRegras.ts` (cadastros: CNPJ/CPF, indicador da inscrição, CEST
 ```powershell
 $env:NODE_PATH = "<pasta>\node_modules"
 $env:BASE = "http://localhost:<porta>/ACN/"
-node ferramentas/teste_fiscal/teste_fiscal_tela.cjs     # 37 conferências em 26/11/2026
+node ferramentas/teste_fiscal/teste_fiscal_tela.cjs     # 59 conferências em 26/11/2026
 ```
 
-Cobre: as empresas emitentes (ACN e DETECH, o aviso do certificado digital, gravação que falha não vira "salvo"), as transportadoras (cadastro, nome obrigatório, CNPJ), o relatório de clientes e de itens que faltam (totais, limite de 200 linhas na tela, "Preencher", ação em lote que grava **só a coluna escolhida**), a seção fiscal dentro do cliente, o Conferidor de XML (3 arquivos, filtro, busca, limpar, nada gravado) e a largura em celular de 390 px. As abas e os endereços (`#/fiscal`, `#/fiscal/cadastros`, `#/fiscal/conferidor`) são do cenário C46 do `../teste_enderecos` (`node teste_enderecos.cjs "^C46 fiscal"`).
+Cobre: o arquivo de notas emitidas (dados SIMULADOS: lista, filtros, situação, ligação com a OP, janela da nota com o XML, numeração com buraco e inutilização, OPs sem XML), o botão "Guardar no arquivo" (o que SERIA enviado, sucesso e falha), as empresas emitentes (ACN e DETECH, o aviso do certificado digital, gravação que falha não vira "salvo"), as transportadoras (cadastro, nome obrigatório, CNPJ), o relatório de clientes e de itens que faltam (totais, limite de 200 linhas na tela, "Preencher", ação em lote que grava **só a coluna escolhida**), a seção fiscal dentro do cliente, o Conferidor de XML (3 arquivos, filtro, busca, limpar, nada gravado) e a largura em celular de 390 px. As abas e os endereços (`#/fiscal`, `#/fiscal/cadastros`, `#/fiscal/conferidor`) são do cenário C46 do `../teste_enderecos` (`node teste_enderecos.cjs "^C46 fiscal"`).
 
 **Leitura do banco de produção:** o teste lê clientes e itens inteiros (como a tela). Rode fora do horário de pico.
+
+## 3. A função de gravação no banco
+
+`supabase/sql/fiscal_arquivo_de_notas_teste.sql` (10 conferências, tudo desfeito no fim, relatório na mensagem de erro "TESTE FISCAL"): grava notas inventadas pela conta ZZTESTE e confere a gravação tudo ou nada, o que já estava guardado não ser regravado, a nota sem protocolo receber o protocolo depois, a recusa de quem não vê valores, a de chave com menos de 44 dígitos e a da chave pública.

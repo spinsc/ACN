@@ -227,7 +227,7 @@ export const ABAS_DAS_TELAS: Readonly<Record<string, QuadroDeAbas>> = {
   // Logística (26/11/2026, depois da V4d): a aba de sempre é o Histórico / Novo Registro (`#/logistica`); as outras três ganham endereço.
   logistica: { padrao: 'historico', abas: ['recebimento', 'historico', 'relatorio', 'fretes'] },
   // Fiscal (26/11/2026, preparação do módulo fiscal): antes era uma página só; agora tem o Faturamento de sempre (`#/fiscal`), os Cadastros fiscais (com quatro visões de dentro) e o Conferidor de XML.
-  fiscal: { padrao: 'faturamento', abas: ['faturamento', 'cadastros', 'conferidor'], filhas: { cadastros: { padrao: 'empresas', abas: ['empresas', 'transportadoras', 'clientes', 'itens'] } } },
+  fiscal: { padrao: 'faturamento', abas: ['faturamento', 'arquivo', 'cadastros', 'conferidor'], filhas: { arquivo: { padrao: 'notas', abas: ['notas', 'numeracao', 'sem_xml'] }, cadastros: { padrao: 'empresas', abas: ['empresas', 'transportadoras', 'clientes', 'itens'] } } },
   terceiros: { padrao: 'quadro', abas: ['quadro', 'agenda', 'lista', 'relatorio', 'ordens', 'prestadores', 'tipos', 'modelo'] },
 };
 
