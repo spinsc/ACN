@@ -14,6 +14,8 @@ import { CampoCep } from './CampoCep';
 import { CampoTelefone } from './CampoTelefone';
 import { erroDeTelefone, telefoneParaGravar } from './Telefone';
 import { conferirCepAntesDeSalvar, cepParaGravar } from './Cep';
+import FiscalClienteCampos from './FiscalClienteCampos';
+import { podeEditarCadastroFiscal } from './utils/permissoes';
 
 // Etapa 12e7 (04/10/2026): a parte visual desta tela passou para as peças do design system (Botao, Selo, Chips, Faixa, a janela do
 // sistema, o quadro e as classes acn-tabela / acn-cli-*), no lugar do estilo pintado à mão em cada elemento. Só aparência: os
@@ -91,7 +93,7 @@ function EmailList({ list, setList, readonly }) {
 }
 
 // ─── FormCliente ──────────────────────────────────────────────────────────────
-function FormCliente({ initial, onSave, onCancel, readonly, onEditarVinculado, topo }) {
+function FormCliente({ initial, onSave, onCancel, readonly, onEditarVinculado, topo, currentUser }) {
   const [f, setF]               = useState({ ...CLIENTE_VAZIO, ...initial });
   const [telefones, setTelefones] = useState(initial?.telefones?.length ? initial.telefones : [{ numero:'', tipo:'Principal' }]);
   const [emails,    setEmails]    = useState(initial?.emails?.length    ? initial.emails    : [{ email:'', tipo:'Principal' }]);
@@ -310,6 +312,9 @@ function FormCliente({ initial, onSave, onCancel, readonly, onEditarVinculado, t
             onResultado={(r) => { if (r.status === 'ok') { set('cidade', r.cidade); set('estado', r.uf); if (!f.endereco && r.logradouro) set('endereco', r.logradouro); if (!f.bairro && r.bairro) set('bairro', r.bairro); } }} /></div>
         </div>
       </div>
+
+      {/* Dados fiscais (26/11/2026, preparação do módulo fiscal): peça própria, grava em fiscal_clientes com o botão dela; só aparece no cadastro já salvo */}
+      <FiscalClienteCampos clienteId={initial?.id || null} currentUser={currentUser} podeEditar={podeEditarCadastroFiscal(currentUser) && !readonly} />
 
       {/* Observações */}
       <div>
@@ -585,6 +590,7 @@ export default function ClientesTab({ currentUser }) {
               onSave={() => { setModalForm(null); load(); }}
               onCancel={() => setModalForm(null)}
               onEditarVinculado={id => abrirPorId(id)}
+              currentUser={currentUser}
               topo={<>
                 {modoForm==='ver' && !podeEditar && (
                   <Faixa tom="atencao">Acesso somente de visualização. Contate um administrador para editar.</Faixa>

@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
+import { enviarArquivoPrivado } from './ArquivoPrivado';   // 26/11/2026 (Etapa 17, onda 5b): a assinatura do CQ mora no bucket PRIVADO
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoCompacto } from './AcnTabShared';
 import { horasUteis } from './utils/horasUteis';
@@ -123,10 +124,9 @@ export default function QualidadeTab({ currentUser }) {
       // Só o nome do ARQUIVO é limpo; o número gravado na auditoria continua o de sempre.
       const numeroSeguro = String(numero || "op").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-zA-Z0-9._-]/g, "_");
       const path = `assinaturas/cq_${numeroSeguro}_${Date.now()}.png`;
-      const { data: up, error: errUp } = await supabase.storage.from('acn-media').upload(path, blob, { contentType:'image/png', upsert:true });
-      if (errUp || !up) throw (errUp || new Error('o armazenamento não respondeu'));
-      const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-      sigUrl = pub?.publicUrl;
+      const { valor: sigValor, erro: errUp } = await enviarArquivoPrivado(path, blob, 'image/png');
+      if (errUp || !sigValor) throw (errUp || new Error('o armazenamento não respondeu'));
+      sigUrl = sigValor;
     } catch(e) {
       console.warn('Signature upload failed', e);
       alert('Erro ao enviar a assinatura: ' + explicarErroDeEnvio(e) + '\nA aprovação não foi registrada: tente de novo.');

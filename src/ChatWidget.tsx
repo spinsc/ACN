@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { confirmarRemocao } from './Feedback';
 import { supabase } from './supabaseClient';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
+import { enviarArquivoPrivado, useUrlDoArquivo, abrirArquivo } from './ArquivoPrivado';   // 26/11/2026 (Etapa 17, onda 5b): o anexo do chat mora no bucket PRIVADO, só os membros da sala o leem
 import Linkify from './Linkify';
 import { normalizarBusca, combinaBusca, buscarPorPalavras } from './SearchUtils';
 import { confirmar, mostrarAviso } from './Feedback';
@@ -26,6 +27,18 @@ function Avatar({ nome, size = 26, tom }: any) {
 
 function GroupIcon({ size = 26 }: any) {
   return <span className="acn-chat-gi" data-t={size}>👥</span>;
+}
+
+// Imagem do anexo: o endereço assinado chega depois do primeiro desenho da tela (o arquivo é privado); o clique pede um endereço novo.
+function ImagemDoChat({ valor, nome }: { valor: string; nome?: string }) {
+  const url = useUrlDoArquivo(valor);
+  if (url === undefined) return <div className="acn-chat-img"><span className="acn-fraco">…</span></div>;
+  if (!url) return <div className="acn-chat-arq"><span className="acn-chat-arq-nome">Imagem indisponível agora</span></div>;
+  return (
+    <a className="acn-chat-img" href={url} target="_blank" rel="noreferrer" onClick={(e) => { e.preventDefault(); abrirArquivo(valor); }}>
+      <img src={url} alt={nome} />
+    </a>
+  );
 }
 
 export default function ChatWidget({ currentUser, onNavigate }: any) {
@@ -658,10 +671,9 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
     setEnviandoAnexo(true);
     const nomeLimpo = file.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9.\-_]/g, '_');
     const path = `chat/${salaAtiva.id}/${Date.now()}_${nomeLimpo}`;
-    const { error: errUp } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
+    const { valor: anexoValor, erro: errUp } = await enviarArquivoPrivado(path, file);
     if (errUp) { alert('Não foi possível enviar o anexo: ' + explicarErroDeEnvio(errUp, file)); setEnviandoAnexo(false); limparCampo(); return; }
-    const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-    await inserirEEnviar({ anexo_url: pub?.publicUrl || null, anexo_nome: file.name, anexo_tipo: file.type || null });
+    await inserirEEnviar({ anexo_url: anexoValor, anexo_nome: file.name, anexo_tipo: file.type || null });
     setEnviandoAnexo(false);
     limparCampo();
   };
@@ -1004,11 +1016,9 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
                             {/* Anexo */}
                             {!m.apagada_em && m.anexo_url && !m.anexo_apagado_em && (
                               ehImagem(m.anexo_tipo) ? (
-                                <a className="acn-chat-img" href={m.anexo_url} target="_blank" rel="noreferrer">
-                                  <img src={m.anexo_url} alt={m.anexo_nome} />
-                                </a>
+                                <ImagemDoChat valor={m.anexo_url} nome={m.anexo_nome} />
                               ) : (
-                                <a className="acn-chat-arq" data-proprio={meu} href={m.anexo_url} target="_blank" rel="noreferrer">
+                                <a className="acn-chat-arq" data-proprio={meu} href="#" onClick={(e) => { e.preventDefault(); abrirArquivo(m.anexo_url); }}>
                                   <span className="acn-chat-arq-icone">📄</span>
                                   <span className="acn-chat-arq-nome">
                                     {m.anexo_nome}
