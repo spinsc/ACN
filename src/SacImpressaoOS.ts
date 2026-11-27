@@ -6,8 +6,17 @@
 // ─────────────────────────────────────────────────────────────────────────────
 const fmtDataSAC = (d: any) => !d ? '—' : /^\d{4}-\d{2}-\d{2}$/.test(String(d)) ? String(d).split('-').reverse().join('/') : new Date(d).toLocaleDateString('pt-BR');
 
-/** Abre a janela de impressão da OS. `STATUS_COR` é o mapa de cores das etapas (vive no SacTab). */
-export function gerarPdfDaOS(os: any, STATUS_COR: any) {
+import { urlDoArquivo } from './ArquivoPrivado';
+
+/** Abre a janela de impressão da OS. `STATUS_COR` é o mapa de cores das etapas (vive no SacTab).
+ *  26/11/2026 (Etapa 17, onda 5b): as assinaturas moram no bucket privado; a janela abre NA HORA do clique (senão o navegador a barra) e só depois chegam os endereços assinados. */
+export async function gerarPdfDaOS(os: any, STATUS_COR: any) {
+  const w = window.open('', '_blank');
+  if (!w) { alert('Permita pop-ups neste site para gerar o PDF.'); return; }
+  w.document.write('<p style="font-family:sans-serif;color:#475569">Preparando a folha da OS…</p>');
+  os = { ...os,
+    assinatura_aprovacao_url: os.assinatura_aprovacao_url ? await urlDoArquivo(os.assinatura_aprovacao_url) : os.assinatura_aprovacao_url,
+    assinatura_saida_url: os.assinatura_saida_url ? await urlDoArquivo(os.assinatura_saida_url) : os.assinatura_saida_url };
   const fmtDt  = fmtDataSAC;
   // o técnico escreve à mão o que o cadastro não tem (pedido do usuário em 05/11/2026): uma linha em branco no lugar do traço
   const campoEmBranco = '<span style="display:inline-block;min-width:150px;height:18px;border-bottom:1px solid #1e293b"></span>';
@@ -227,8 +236,7 @@ export function gerarPdfDaOS(os: any, STATUS_COR: any) {
     <script>window.onload=function(){window.print()}</script>
   </body></html>`;
 
-  const w = window.open('', '_blank');
-  if (!w) { alert('Permita pop-ups neste site para gerar o PDF.'); return; }
+  w.document.open();
   w.document.write(html);
   w.document.close();
 }
