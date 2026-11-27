@@ -1,4 +1,4 @@
-// A barra de endereço e o histórico do navegador (plano PLANO_ENDERECOS_E_ROTAS.md, Fase 1, 25/11/2026).
+// A barra de endereço e o histórico do navegador (plano PLANOS CONCLUIDOS/PLANO_ENDERECOS_E_ROTAS.md, Fase 1, 25/11/2026).
 //
 // As regras de ler e montar o endereço são do `Rotas.ts` (puras). Aqui está só o que toca o navegador: escrever o endereço, guardar um passo no
 // histórico (Voltar e Avançar), perceber que o endereço mudou e zerá-lo. Tudo com try/catch: um navegador que recuse o histórico não pode

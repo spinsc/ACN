@@ -1,4 +1,4 @@
-// O filtro de uma tela e o endereço dele (plano PLANO_ENDERECOS_E_ROTAS.md, Fase 5, parte 3, 26/11/2026).
+// O filtro de uma tela e o endereço dele (plano PLANOS CONCLUIDOS/PLANO_ENDERECOS_E_ROTAS.md, Fase 5, parte 3, 26/11/2026).
 //
 // É o mesmo `useState` do filtro com a barra do navegador por baixo: `const [saida, setSaida] = useFiltroNoEndereco({ tela: 'viagens', chave: 'saida', padrao: 'todas' })`.
 // O filtro mora depois do `?` do endereço (`#/viagens/lista?saida=semana`) e o caminho (tela, aba, registro) segue como sempre. O que o gancho faz, nos dois sentidos:

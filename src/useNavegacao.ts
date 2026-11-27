@@ -1,4 +1,4 @@
-// Qual tela está aberta e como trocar de tela (plano PLANO_ENDERECOS_E_ROTAS.md, Fase 1, decidido com o usuário em 25/11/2026).
+// Qual tela está aberta e como trocar de tela (plano PLANOS CONCLUIDOS/PLANO_ENDERECOS_E_ROTAS.md, Fase 1, decidido com o usuário em 25/11/2026).
 //
 // Antes: a tela era uma variável do `DashboardTab` trocada por cerca de 20 pontos (menu, logo, busca geral, painéis, chat, atalhos internos),
 // sem nada na barra do navegador (F5 voltava ao Início; Voltar e Avançar não funcionavam; não se mandava link).

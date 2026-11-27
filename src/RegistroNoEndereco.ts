@@ -1,4 +1,4 @@
-// A janela de um registro que mora numa tela e o endereço dela (plano PLANO_ENDERECOS_E_ROTAS.md, Fase 3, decidido com o usuário em 25/11/2026 e construído em 26/11/2026).
+// A janela de um registro que mora numa tela e o endereço dela (plano PLANOS CONCLUIDOS/PLANO_ENDERECOS_E_ROTAS.md, Fase 3, decidido com o usuário em 25/11/2026 e construído em 26/11/2026).
 //
 // O endereço `#/crm/card/<código>` (e `#/licitacoes/licitacao/…`, `#/compras/pedido/…`, `#/sac/os/…`) abre a janela do registro DENTRO da tela dona dele. Cada tela já abre a
 // janela do seu jeito (um `useState` com o registro escolhido), e quem a abre é a lista, uma Menção, um aviso, o chat, a busca geral… então, como na janela da OP (Fase 2), a regra

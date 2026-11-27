@@ -3,7 +3,7 @@ import React from 'react';
 import { Botao, Faixa } from './Interface';
 import './endereco.css';
 
-// O que aparece no lugar da tela quando um link não pode abrir (plano PLANO_ENDERECOS_E_ROTAS.md, Fase 1, regra 4, decidida em 25/11/2026):
+// O que aparece no lugar da tela quando um link não pode abrir (plano PLANOS CONCLUIDOS/PLANO_ENDERECOS_E_ROTAS.md, Fase 1, regra 4, decidida em 25/11/2026):
 // nunca tela em branco. "Conferindo" é o instante em que o sistema ainda relê as permissões da pessoa no banco (as guardadas no navegador podem
 // estar velhas, e uma recusa falsa seria pior que esperar um segundo); "sem acesso" é alerta e, como todo alerta novo, vai em vermelho.
 export default function AvisoDeEndereco({ bloqueio, rotulo, aoIrParaInicio }: {

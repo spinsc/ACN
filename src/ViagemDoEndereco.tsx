@@ -1,6 +1,6 @@
 // @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
-// VIAGENS — o hospedeiro da janela da viagem aberta PELO ENDEREÇO (plano PLANO_ENDERECOS_E_ROTAS.md, Fase 5, 26/11/2026).
+// VIAGENS — o hospedeiro da janela da viagem aberta PELO ENDEREÇO (plano PLANOS CONCLUIDOS/PLANO_ENDERECOS_E_ROTAS.md, Fase 5, 26/11/2026).
 //
 // Substitui o `ViagemPorMencao` (04/11/2026), que abria a viagem por cima de qualquer aba só para quem NÃO tem a aba Viagens, pelo recado interno. Agora quem pede a viagem é o
 // endereço `#/viagem/<código>` (o F5, o link colado, o Voltar e o Avançar, e a Menção de quem não tem a aba), para qualquer pessoa: a mesma janela, com as partes dos outros setores
