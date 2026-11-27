@@ -28,6 +28,8 @@ import ConfigEstruturaTela from './ConfigEstruturaTela';
 import FluxoConfigTela from './FluxoConfigTela';
 // 12e83 (26/11/2026): os painéis Config. Email, Config. Cotações, Faixas de Markup e Config. NFC moram em AdminPaineisConfig.tsx, já no padrão do design system
 import { PainelEmailCfg, PainelCotacoesCfg, PainelMarkupCfg, PainelNfcCfg } from './AdminPaineisConfig';
+// 12e84 (26/11/2026): o painel Logs do Sistema (log de movimentações das OPs) mora em AdminPainelLogs.tsx, já no padrão do design system
+import { PainelLogs } from './AdminPainelLogs';
 import { CampoMoeda } from './CampoMoeda';
 import { useAbaNoEndereco } from './AbaNoEndereco';
 
@@ -795,82 +797,6 @@ function PainelChecklist() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-// ---- LOGS DO SISTEMA ----
-function PainelLogs() {
-  const [logs, setLogs] = useState([]);
-  const [filtroSetor, setFiltroSetor] = useState('');
-  const [filtroOpl, setFiltroOpl] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => { fetchLogs(); }, []);
-
-  const fetchLogs = async () => {
-    setLoading(true);
-    let q = supabase.from('logs_movimentacao_opl').select('*').order('data_hora', { ascending: false }).limit(200);
-    if (filtroSetor) q = q.eq('setor', filtroSetor);
-    if (filtroOpl) q = q.ilike('numero_opl', `%${filtroOpl}%`);
-    const { data } = await q;
-    setLogs(data || []);
-    setLoading(false);
-  };
-
-  const SETORES_LOG = ['Comercial','Engenharia','PCP','Almoxarifado','Producao','CQ','Fiscal','Logistica'];
-  const fmtDtHr = (d) => d ? new Date(d).toLocaleString('pt-BR') : '—';
-  const corSetor = (s) => ({
-    Comercial:'#2563eb',Engenharia:'#7c3aed',PCP:'#f59e0b',Almoxarifado:'#0891b2',
-    Producao:'#16a34a',CQ:'#dc2626',Fiscal:'#f97316',Logistica:'#475569',
-  })[s] || '#94a3b8';
-
-  return (
-    <div>
-      <div className="sec-card">
-        <div className="sec-hdr">
-          <span>Log de Movimentacoes de OPs ({logs.length})</span>
-          <button className="acn-btn" style={{background:'#475569'}} onClick={fetchLogs}>Atualizar</button>
-        </div>
-        <div className="sec-body" style={{borderBottom:'1px solid #e2e8f0'}}>
-          <div className="form-row">
-            <div className="form-group"><label className="acn-label">Filtrar por Setor</label>
-              <select className="acn-input" style={{width:'100%'}} value={filtroSetor} onChange={e=>{setFiltroSetor(e.target.value);}}>
-                <option value="">Todos os setores</option>
-                {SETORES_LOG.map(s=><option key={s}>{s}</option>)}
-              </select>
-            </div>
-            <div className="form-group"><label className="acn-label">Filtrar por OP</label>
-              <input className="acn-input" style={{width:'100%'}} placeholder="ex: 1324" value={filtroOpl} onChange={e=>setFiltroOpl(e.target.value)} />
-            </div>
-            <div style={{display:'flex',alignItems:'flex-end'}}>
-              <button className="acn-btn" style={{background:'#1e293b'}} onClick={fetchLogs}>Filtrar</button>
-            </div>
-          </div>
-        </div>
-        <div className="sec-body" style={{overflowX:'auto',padding:0}}>
-          {loading ? <div className="acn-empty">Carregando...</div> : logs.length === 0 ? (
-            <div className="acn-empty">Nenhum log encontrado.</div>
-          ) : (
-            <table>
-              <thead><tr><th>Data/Hora</th><th>OP</th><th>Setor</th><th>Evento</th><th>Status Anterior</th><th>Status Novo</th><th>Usuario</th></tr></thead>
-              <tbody>
-                {logs.map(l => (
-                  <tr key={l.id}>
-                    <td style={{whiteSpace:'nowrap'}}>{fmtDtHr(l.data_hora)}</td>
-                    <td><strong style={{color:'#2563eb'}}>{l.numero_opl}</strong></td>
-                    <td><span className="acn-badge" style={{background:corSetor(l.setor)}}>{l.setor}</span></td>
-                    <td style={{maxWidth:250,fontSize:10}}>{l.evento}</td>
-                    <td style={{fontSize:10,color:'#94a3b8'}}>{l.status_anterior||'—'}</td>
-                    <td style={{fontSize:10,color:'#22c55e',fontWeight:600}}>{l.status_novo||'—'}</td>
-                    <td style={{fontSize:10}}>{l.usuario_nome||l.usuario_email||'—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
     </div>
   );
 }
