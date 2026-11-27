@@ -30,6 +30,8 @@ import FluxoConfigTela from './FluxoConfigTela';
 import { PainelEmailCfg, PainelCotacoesCfg, PainelMarkupCfg, PainelNfcCfg } from './AdminPaineisConfig';
 // 12e84 (26/11/2026): o painel Logs do Sistema (log de movimentações das OPs) mora em AdminPainelLogs.tsx, já no padrão do design system
 import { PainelLogs } from './AdminPainelLogs';
+// 12e85 (26/11/2026): o painel Checklist CQ (itens que a Qualidade confere em cada veículo) mora em AdminPainelChecklist.tsx, já no padrão do design system
+import { PainelChecklist } from './AdminPainelChecklist';
 import { CampoMoeda } from './CampoMoeda';
 import { useAbaNoEndereco } from './AbaNoEndereco';
 
@@ -690,110 +692,6 @@ function PainelPerfis() {
               </button>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModal(null)}>Cancelar</button>
             </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---- CHECKLIST CQ ----
-function PainelChecklist() {
-  const [itens, setItens] = useState([]);
-  const [novoItem, setNovoItem] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => { fetchItens(); }, []);
-
-  const fetchItens = async () => {
-    setLoading(true);
-    const { data } = await supabase.from('cq_checklist_itens').select('*').order('ordem');
-    setItens(data || []);
-    setLoading(false);
-  };
-
-  const addItem = async () => {
-    if (!novoItem.trim()) return;
-    const maxOrdem = itens.length > 0 ? Math.max(...itens.map(i => i.ordem || 0)) + 1 : 1;
-    const { error } = await supabase.from('cq_checklist_itens').insert([{
-      item_texto: novoItem.trim(),
-      ativo: true,
-      ordem: maxOrdem,
-    }]);
-    if (error) {
-      alert('Erro ao adicionar item: ' + error.message + '\n\nCertifique-se de ter executado o SQL acn_fix_usuarios_tecnicos.sql no Supabase.');
-      return;
-    }
-    setNovoItem('');
-    fetchItens();
-  };
-
-  const toggleItem = async (item) => {
-    await supabase.from('cq_checklist_itens').update({ ativo: !item.ativo }).eq('id', item.id);
-    fetchItens();
-  };
-
-  const deleteItem = async (item) => {
-    if (!await confirmar(`Remover item: "${item.item_texto}"?`)) return;
-    await supabase.from('cq_checklist_itens').delete().eq('id', item.id);
-    fetchItens();
-  };
-
-  const moverItem = async (item, direcao) => {
-    const idx = itens.findIndex(i=>i.id===item.id);
-    const outro = itens[idx + direcao];
-    if (!outro) return;
-    await Promise.all([
-      supabase.from('cq_checklist_itens').update({ ordem: outro.ordem }).eq('id', item.id),
-      supabase.from('cq_checklist_itens').update({ ordem: item.ordem }).eq('id', outro.id),
-    ]);
-    fetchItens();
-  };
-
-  const ativos = itens.filter(i=>i.ativo);
-  const inativos = itens.filter(i=>!i.ativo);
-
-  return (
-    <div>
-      <div className="sec-card">
-        <div className="sec-hdr">
-          <span>Itens do Checklist de CQ ({ativos.length} ativos)</span>
-        </div>
-        <div className="sec-body">
-          <div style={{display:'flex',gap:6,marginBottom:12}}>
-            <input className="acn-input" style={{flex:1}} placeholder="Novo item de checklist..."
-              value={novoItem} onChange={e=>setNovoItem(e.target.value)}
-              onKeyDown={e=>e.key==='Enter'&&addItem()} />
-            <button className="acn-btn" style={{background:'#22c55e'}} onClick={addItem}>+ Adicionar</button>
-          </div>
-          {loading ? <div className="acn-empty">Carregando...</div> : (
-            <div>
-              {ativos.map((item, idx) => (
-                <div key={item.id} style={{display:'flex',alignItems:'center',gap:6,padding:'6px 8px',background:'#f8fafc',borderRadius:4,marginBottom:4,border:'1px solid #e2e8f0'}}>
-                  <span style={{color:'#94a3b8',fontSize:10,minWidth:20,textAlign:'right'}}>{item.ordem||idx+1}.</span>
-                  <span style={{flex:1,fontSize:11}}>{item.item_texto}</span>
-                  <button style={{background:'none',border:'none',cursor:'pointer',color:'#94a3b8',fontSize:14,padding:'0 2px'}} onClick={()=>moverItem(item,-1)} title="Mover para cima">↑</button>
-                  <button style={{background:'none',border:'none',cursor:'pointer',color:'#94a3b8',fontSize:14,padding:'0 2px'}} onClick={()=>moverItem(item,1)} title="Mover para baixo">↓</button>
-                  <button className="acn-btn" style={{background:'#f59e0b',fontSize:9,padding:'2px 6px'}} onClick={()=>toggleItem(item)}>Desativar</button>
-                  <button className="acn-btn" style={{background:'#ef4444',fontSize:9,padding:'2px 6px'}} onClick={()=>deleteItem(item)}>Remover</button>
-                </div>
-              ))}
-              {itens.length === 0 && <div className="acn-empty">Nenhum item cadastrado. Adicione o primeiro acima.</div>}
-            </div>
-          )}
-        </div>
-      </div>
-      {inativos.length > 0 && (
-        <div className="sec-card">
-          <div className="sec-hdr"><span style={{color:'#94a3b8'}}>Itens Desativados ({inativos.length})</span></div>
-          <div className="sec-body">
-            {inativos.map(item => (
-              <div key={item.id} style={{display:'flex',alignItems:'center',gap:6,padding:'4px 8px',opacity:0.5,marginBottom:2}}>
-                <span style={{flex:1,fontSize:11,textDecoration:'line-through'}}>{item.item_texto}</span>
-                <button className="acn-btn" style={{background:'#22c55e',fontSize:9,padding:'2px 6px'}} onClick={()=>toggleItem(item)}>Reativar</button>
-                <button className="acn-btn" style={{background:'#ef4444',fontSize:9,padding:'2px 6px'}} onClick={()=>deleteItem(item)}>Remover</button>
-              </div>
-            ))}
           </div>
         </div>
       )}
