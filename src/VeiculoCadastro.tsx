@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // CADASTRO DE VEÍCULO — a tela que alimenta o catálogo da casa
 //
@@ -170,7 +169,7 @@ export function ModalCadastrarVeiculo({ currentUser, aoSalvar, aoFechar, veiculo
   const trocarModeloDasOps = trocaOps ?? (editando && nomeNovo !== String(veiculo.nome_exibicao || ''));
 
   const gravarEdicao = async ({ marca, nome, de, ate, anoEscolhido }) => {
-    const novo = {
+    const novo: Record<string, any> = {
       tipo, marca, modelo: nome, nome_exibicao: nome,
       nome_norm: normalizarBusca(marca + ' ' + nome),
       ano_de: de, ano_ate: ate,
@@ -508,7 +507,7 @@ export function SelectVeiculo({ valor, onChange, currentUser, style, compacto = 
  * `onChange` devolve os dois de uma vez. Ficha vazia limpa só o `veiculo_id`: o texto que já estava
  * na OP não é apagado por engano.
  */
-export function VeiculoDaOp({ veiculoId, onChange, currentUser, compacto = false, placeholder, style }) {
+export function VeiculoDaOp({ veiculoId, onChange, currentUser, compacto = false, placeholder = undefined, style = undefined }: { veiculoId: any; onChange: any; currentUser: any; compacto?: boolean; placeholder?: any; style?: any }) {
   return (
     <SelectVeiculo valor={veiculoId || ''} currentUser={currentUser} compacto={compacto}
       placeholder={placeholder} style={style}

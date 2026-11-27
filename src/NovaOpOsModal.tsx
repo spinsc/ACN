@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // NovaOpOsModal — criação centralizada de OP (Ordem de Produção) ou OS
 // Pode ser chamado de qualquer aba: Comercial/CRM, card CRM, SAC, etc.
@@ -164,7 +163,7 @@ const VAZIO = {
   modelo:                 '',
   veiculo_id:             '',
   quantidade:             1,
-  veiculos:               [] as {chassi:string, placa:string, modelo:string}[], // para desmembramento
+  veiculos:               [] as {chassi:string, placa:string, modelo:string, veiculo_id?:string}[], // para desmembramento
   valor_total:            '',
   frete_responsavel:      '',   // 'CIF' (empresa paga) | 'FOB' (cliente paga) — só Venda para Envio
   valor_mao_de_obra:      '',

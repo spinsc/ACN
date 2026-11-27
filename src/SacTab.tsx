@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { supabase } from './supabaseClient';
 import { registrarFalhaDeEnvio, motivoDoUltimoEnvio } from './ErroDeArquivo';
 import { confirmarRemocao } from './Feedback';
@@ -33,7 +32,7 @@ import { gerarPdfDaOS } from './SacImpressaoOS';
 import { enviarArquivoPrivado } from './ArquivoPrivado';
 import { LinkDeArquivo, ImagemPrivada } from './ArquivoPrivadoTela';   // 26/11/2026 (plano do bucket privado, B2)
 import { formularioDaCopiaDaOs, MAX_COPIAS_OS, LEVA_DA_OS, NAO_LEVA_DA_OS } from './CopiarOpOs';
-import { Abas, Botao, Selo, Chips, MenuAcoes, Faixa, hojeISO } from './Interface';
+import { Abas, Botao, Selo, Chips, MenuAcoes, Faixa, hojeISO, type Familia } from './Interface';
 import { mdiFormatListBulleted, mdiViewColumnOutline, mdiChevronUp, mdiChevronDown, mdiClipboardPlusOutline, mdiAccountWrenchOutline } from '@mdi/js';
 import Icone from './Icone';
 import SacResumoOS from './SacResumoOS';
@@ -85,7 +84,7 @@ const STATUS_COR: Record<string, string> = {
 
 // Etapa 12d3 (01/10/2026): na lista de OS a cor do status vem da FAMÍLIA do guia de interface (a mesma de todas as telas), não mais do hexadecimal acima — que segue valendo só para
 // as opções do filtro e para o PDF da OS. Regra: pedindo ação ou resposta de alguém = atenção; em andamento no laboratório/produção = marca; já tratado = ok; recusado = erro.
-const FAMILIA_STATUS_SAC: Record<string, string> = {
+const FAMILIA_STATUS_SAC: Record<string, Familia> = {
   'Diagnóstico': 'info', 'Aberta': 'info', 'Orçamento Pronto': 'marca', 'Orç. Enviado': 'atencao', 'Aprovado': 'info', 'Reprovado': 'erro',   // M5 (03/11/2026, escolha do usuário): Aprovado e Provisionada deixam de ser verdes (verde = terminou); viram azul de andamento
   'Em Execução': 'marca', 'Concluído': 'ok', 'Entregue': 'ok',
   'Em Cotação': 'info', 'Aguardando Aprovação Cliente': 'atencao', 'Em Provisionamento': 'marca', 'Aguardando Aceite SAC': 'atencao', 'Provisionada': 'info',
@@ -286,7 +285,7 @@ function SacTabCompleto({ currentUser }) {
   // 26/11/2026 (Fase 4 do plano de endereços): a aba da tela tem endereço (#/sac/garantia…); a aba das OS é a padrão e fica sem nome na barra. O link de um aviso da Garantia
   // (recado __acnDeepLink) só dá o valor de partida: se o endereço já traz uma aba, é ele que vale.
   // Fase 6 (26/11/2026): o endereço de uma ficha da Garantia (`#/sac/ficha/<código>`) também parte na aba Garantia, que é onde a janela da ficha mora.
-  const [abaAtiva, setAbaAtiva]         = useAbaNoEndereco({ tela: 'sac', inicial: () => (registroDaTelaNoEndereco(enderecoAtual(), 'sac')?.tipo === 'ficha' || (window as any).__acnDeepLink?.contexto === 'garantia') ? 'garantia' : 'os' }) as [string, (v: any) => void];
+  const [abaAtiva, setAbaAtiva]         = useAbaNoEndereco({ tela: 'sac', inicial: () => (registroDaTelaNoEndereco(enderecoAtual(), 'sac')?.tipo === 'ficha' || (window as any).__acnDeepLink?.contexto === 'garantia') ? 'garantia' : 'os' });
   const [chamadosNfc,  setChamadosNfc]  = useState<any[]>([]);
   const [loadNfc,      setLoadNfc]      = useState(false);
   const [nfcStatus,    setNfcStatus]    = useState('');
@@ -400,7 +399,7 @@ function SacTabCompleto({ currentUser }) {
   const [arquivosEntradaFiles, setArquivosEntradaFiles] = useState<File[]>([]);
 
   // Lista de equipamentos por item (cresce/diminui conforme quantidade)
-  const EQUIP_VAZIO = { marca:'', modelo:'', numero_serie:'', chassi:'', defeito:'', veiculo_id:'' };
+  const EQUIP_VAZIO: Record<string, any> = { marca:'', modelo:'', numero_serie:'', chassi:'', defeito:'', veiculo_id:'' };
   const [equipLista, setEquipLista]     = useState([{ ...EQUIP_VAZIO }]);
   // Lote de OS (pedido do usuário em 07/10/2026): com vários equipamentos, "uma OS para cada" — cada uma com o seu número, ligadas por lote_id; o quadro mostra o lote num card só.
   const [criarEmLote, setCriarEmLote]       = useState(false);

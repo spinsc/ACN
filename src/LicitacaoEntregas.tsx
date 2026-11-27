@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // LICITAÇÃO VENCIDA — ENDEREÇOS, CONTRATO E ENTREGAS
 // Ganhar "10 adaptações" não significa entregar 10 de uma vez: o órgão pede
@@ -198,7 +197,7 @@ export function ContratoEntregas({ licit, currentUser }) {
       supabase.from('licitacao_enderecos').select('*').eq('licitacao_id', licit.id).order('ordem').order('criado_em'),
     ]);
     // leitura recusada nunca vale como "vazio": o saldo de cada item soma pedidos e aditivos, e o botão de importar duplicaria os itens
-    const falhou = [[a, 'os itens'], [b, 'os pedidos'], [c, 'os aditivos'], [d, 'os endereços']].filter(([r]) => r.error);
+    const falhou = ([[a, 'os itens'], [b, 'os pedidos'], [c, 'os aditivos'], [d, 'os endereços']] as any[][]).filter(([r]) => r.error);
     if (falhou.length) {
       setErroLeitura(`Não foi possível ler ${falhou.map(([, o]) => o).join(', ')} do contrato: ${explicarErroDoBanco(falhou[0][0].error)}${leu ? ' O que aparece abaixo pode estar desatualizado.' : ''}`);
       setCarregando(false);
@@ -285,7 +284,7 @@ export function ContratoEntregas({ licit, currentUser }) {
     } finally { ocupado.current = false; setSalvando(false); }
   };
 
-  const remover = async (tabela, reg, descricao, pergunta) => {
+  const remover = async (tabela, reg, descricao, pergunta = undefined) => {
     if (tabela === 'licitacao_pedidos' && reg.opl && !await confirmar(`Este pedido já gerou a OP ${reg.opl}. Remover o pedido NÃO apaga a OP.\n\nRemover o pedido mesmo assim?`)) return;
     if (tabela !== 'licitacao_pedidos' || !reg.opl) { if (!await confirmar(pergunta || `Remover ${descricao}?`)) return; }
     const { data, error } = await supabase.from(tabela).delete().eq('id', reg.id).select('id');

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // PAINEL DO CENTRO DE CUSTO (Etapa 15b do ux-fluxo, 05/10/2026)
 //
@@ -174,7 +173,7 @@ export function faixaDoConsumo(usado: number, orcado: number): 'sem' | 'ok' | 'a
   if (u * 100 >= o * 80) return 'atencao';
   return 'ok';
 }
-const FAMILIA_FAIXA: Record<string, string> = { sem: 'neutro', ok: 'ok', atencao: 'atencao', estouro: 'erro' };
+const FAMILIA_FAIXA: Record<string, Familia> = { sem: 'neutro', ok: 'ok', atencao: 'atencao', estouro: 'erro' };
 
 // ─── COMPARATIVO, CUSTO POR OP E PLANILHA (Etapa 15e, 05/10/2026) ──────────────
 /** O gasto (realizado + comprometido) de um mês de um ano, com a subárvore do centro. O previsto fica de fora, como no saldo. */

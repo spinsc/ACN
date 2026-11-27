@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { supabase } from './supabaseClient';
 import { iniciarVerComo } from './VerComo';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
@@ -129,13 +128,13 @@ const PERFIS_PADRAO_RH: Record<string, boolean> = {
 
 function PainelUsuarios() {
   const [usuarios, setUsuarios] = useState([]);
-  const [form, setForm] = useState({ nome:'', email:'', senha:'', perfil:'Comercial', whatsapp:'', abas_permitidas: ['dashboard'], pode_autorizar_rh: false, permissoes_crm: [], permissoes_rh: [], recebe_alerta_analise: false, pode_aprovar_compra: false, ve_todas_tarefas_financeiro: false, pode_deletar_anexos: false, pode_postar_inicio: false, pode_gerir_terceiros: false, pode_excluir_op: false, pode_alterar_numero_op: false, pode_excluir_formacao: false, pode_copiar_op: false, pode_excluir_registros: false, pode_corrigir_data_nota: false, ver_valores: true });
+  const [form, setForm] = useState<Record<string, any>>({ nome:'', email:'', senha:'', perfil:'Comercial', whatsapp:'', abas_permitidas: ['dashboard'], pode_autorizar_rh: false, permissoes_crm: [], permissoes_rh: [], recebe_alerta_analise: false, pode_aprovar_compra: false, ve_todas_tarefas_financeiro: false, pode_deletar_anexos: false, pode_postar_inicio: false, pode_gerir_terceiros: false, pode_excluir_op: false, pode_alterar_numero_op: false, pode_excluir_formacao: false, pode_copiar_op: false, pode_excluir_registros: false, pode_corrigir_data_nota: false, ver_valores: true });
   const [showForm, setShowForm] = useState(false);
   const [histPessoa, setHistPessoa] = useState('');   // 24/11/2026: pessoa do botão "Histórico" da linha
   const [visao, setVisao] = useState('lista');   // 24/11/2026: 'lista' (editar) ou 'matriz' (quem tem o quê, só leitura)
   const [loading, setLoading] = useState(false);
   const [modalEditar, setModalEditar] = useState(null);
-  const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false, permissoes_crm: [], permissoes_rh: [], recebe_alerta_analise: false, pode_postar_inicio: false, pode_gerir_terceiros: false, pode_excluir_op: false, pode_alterar_numero_op: false, pode_excluir_formacao: false, pode_copiar_op: false, pode_excluir_registros: false, pode_corrigir_data_nota: false, ver_valores: true, gestor_id: null });
+  const [editForm, setEditForm] = useState<Record<string, any>>({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false, permissoes_crm: [], permissoes_rh: [], recebe_alerta_analise: false, pode_postar_inicio: false, pode_gerir_terceiros: false, pode_excluir_op: false, pode_alterar_numero_op: false, pode_excluir_formacao: false, pode_copiar_op: false, pode_excluir_registros: false, pode_corrigir_data_nota: false, ver_valores: true, gestor_id: null });
   const [perfisDB, setPerfisDB] = useState([]);
   // Etapa 16c (10/10/2026): definir a senha de OUTRA pessoa exige a senha de quem está definindo (um Admin) — conferida no servidor, que guarda só o resumo da nova.
   const [senhaAdmin, setSenhaAdmin] = useState('');
@@ -1125,7 +1124,7 @@ const ABAS_ADMIN = [
 
 export default function AdminTab() {
   // 26/11/2026 (Fase 4 do plano de endereços, com o OK do usuário para só esta linha, sem migrar a tela): a aba tem endereço (#/admin/perfis…); Usuários é a padrão
-  const [abaAtiva, setAbaAtiva] = useAbaNoEndereco({ tela: 'admin' }) as [string, (v: any) => void];
+  const [abaAtiva, setAbaAtiva] = useAbaNoEndereco({ tela: 'admin' });
 
   return (
     <div>

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // CENTRO DE CUSTO — componente único compartilhado (Fase 7)
 // Antes existiam 3 implementações duplicadas de CRUD (AdminTab.tsx

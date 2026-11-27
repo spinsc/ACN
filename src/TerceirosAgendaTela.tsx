@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Serviços de terceiros: a AGENDA (fatia T3 do PLANO_SERVICOS_TERCEIROS.md, 23/11/2026): a semana e o mês, por prestador ou por tipo, com o choque de data em vermelho.
 // O Quadro mostra o que falta fazer com cada pedido; a Agenda mostra QUANDO: quem está onde em cada dia. Uma visita é uma linha só ("manhã · 10 carros (venda 1673.2609)").
 // Esta tela só desenha: as contas (visitas, linhas, choque) estão em TerceirosAgenda.ts e os filtros e contadores são os mesmos do Quadro e da Lista (a barra fica na casca, TerceirosTab.tsx).
@@ -11,18 +10,19 @@ import {
   DIAS_DA_SEMANA, janelaDaAgenda, andarNaAgenda, rotuloDaJanela, diaDeOutroMes, visitasDaAgenda, visitasDaJanela, linhasDaAgenda, visitasPorDia, resumoDaAgenda, choquesDaJanela,
   nomeDoTipoDaVisita, nomeDoPrestadorDaVisita, textoDoPeriodoDaVisita, detalheDaVisita, veiculoEPecasDaVisita,
 } from './TerceirosAgenda';
+import type { PeriodoDaAgenda, AgrupamentoDaAgenda } from './TerceirosAgenda';
 
 const CHAVE_DA_AGENDA = 'acn_terceiros_agenda';
 const MAX_NO_DIA_DO_MES = 3;   // o mês é uma grade apertada: acima disso o dia mostra "mais N" e leva para a semana dele
 
 /** A escolha da última vez (semana ou mês, por prestador ou por tipo); o armazenamento pode falhar: aí abre na semana, por prestador. */
-function escolhaGuardada(): { periodo: string; agrupar: string } {
+function escolhaGuardada(): { periodo: PeriodoDaAgenda; agrupar: AgrupamentoDaAgenda } {
   try {
     const j = JSON.parse(localStorage.getItem(CHAVE_DA_AGENDA) || '{}');
     return { periodo: j.periodo === 'mes' ? 'mes' : 'semana', agrupar: j.agrupar === 'tipo' ? 'tipo' : 'prestador' };
   } catch { return { periodo: 'semana', agrupar: 'prestador' }; }
 }
-function guardarEscolha(periodo: string, agrupar: string) {
+function guardarEscolha(periodo: PeriodoDaAgenda, agrupar: AgrupamentoDaAgenda) {
   try { localStorage.setItem(CHAVE_DA_AGENDA, JSON.stringify({ periodo, agrupar })); } catch { /* sem armazenamento: na próxima vez abre na semana */ }
 }
 

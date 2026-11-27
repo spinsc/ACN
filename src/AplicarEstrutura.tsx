@@ -52,7 +52,7 @@ export async function previsaoDeFalta(linhas) {
  * `opsParaResponder`: as OPs que o botão "Responder agora" atende de uma vez. Na liberação individual é só a própria
  * OP; na liberação em LOTE são todas as marcadas (a tela de resposta em lote existe justamente para elas).
  */
-export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaResponder, onRespondido, onSolicitarDesenvolvimento, onAjustarBom }) {
+export function PainelConferenciaEstrutura({ opl, onUsar = undefined, currentUser, opsParaResponder = undefined, onRespondido = undefined, onSolicitarDesenvolvimento = undefined, onAjustarBom = undefined }: { opl: any; onUsar?: any; currentUser: any; opsParaResponder?: any; onRespondido?: any; onSolicitarDesenvolvimento?: any; onAjustarBom?: any }) {
   const [estado, setEstado] = useState({ carregando: true });
   // etapa 4 (15/10/2026): o material da primeira conta desta janela — o que a BOM em edição representa. `onAjustarBom(diferenca, nomeDoConjunto)` aplica na BOM
   // da janela só o que mudou depois que uma resposta foi trocada (quem abre o painel dentro de um editor de BOM passa esse retorno).

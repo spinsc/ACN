@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Serviços de terceiros: película, plotagem, pintura, lavagem, funilaria, corte e dobra e os outros serviços feitos por quem é de fora (pedido do usuário em 22/11/2026;
 // PLANO_SERVICOS_TERCEIROS.md). Fatia T2: o pedido de serviço, o Quadro (A definir, Agendado, Realizado), a Lista e os filtros de pendência, junto dos dois cadastros da T1 (prestadores e tipos).
 // Fatia T3 (23/11/2026): a Agenda (semana e mês, por prestador ou por tipo, com o choque em vermelho) e o aviso do Calendário que abre o serviço atrasado daqui.
@@ -216,8 +215,8 @@ export default function TerceirosTab({ currentUser }) {
     [servicos.lista, ordens.lista, demandas, saidas, veiculos],
   );
 
-  const mapaTipos = useMemo(() => new Map(tipos.lista.map((t: any) => [t.id, t])), [tipos.lista]);
-  const mapaPrestadores = useMemo(() => new Map(prestadores.lista.map((p: any) => [p.id, p])), [prestadores.lista]);
+  const mapaTipos = useMemo(() => new Map<string, any>(tipos.lista.map((t: any) => [t.id, t])), [tipos.lista]);
+  const mapaPrestadores = useMemo(() => new Map<string, any>(prestadores.lista.map((p: any) => [p.id, p])), [prestadores.lista]);
   const nomesDosPrestadores = useMemo(() => Object.fromEntries(prestadores.lista.map((p: any) => [p.id, p.nome])), [prestadores.lista]);
   const choques = useMemo(() => choquesDeData(lista), [lista]);
   const hoje = hojeISO();

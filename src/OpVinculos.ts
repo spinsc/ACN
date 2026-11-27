@@ -46,6 +46,8 @@ export type ItemVinculo = {
   aberto?: boolean;
   /** de onde o pedido nasceu (hoje só o desenvolvimento usa: 'pcp' = pedido do PCP à Engenharia, que segura a OP — Etapa 18c) */
   origem?: string | null;
+  /** só no Dossiê do lote: as unidades (sufixos /NN) a que o mesmo registro está ligado */
+  unidades?: any;
 };
 
 const txt = (v: any) => (v == null ? '' : String(v).trim());

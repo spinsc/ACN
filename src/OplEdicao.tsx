@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // OplEdicao — edição completa de OP por Admin/Gerente, uma a uma ou em lote
 //
@@ -45,7 +44,7 @@ const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','P
 
 // 'veiculo' = o campo do catálogo de veículos (veiculo_id): o mesmo seletor da criação da OP, que
 // também preenche o texto "Modelo". Pedido do usuário em 29/09/2026 — na edição só dava para digitar.
-type Campo = { campo: string; rotulo: string; tipo: 'texto' | 'numero' | 'dias' | 'moeda' | 'data' | 'select' | 'textarea' | 'veiculo'; opcoes?: string[]; grupo: string };
+type Campo = { campo: string; rotulo: string; tipo: 'texto' | 'numero' | 'dias' | 'moeda' | 'data' | 'select' | 'textarea' | 'veiculo' | 'cep' | 'telefone'; opcoes?: string[]; grupo: string };
 export const CAMPOS_OPL: Campo[] = [
   { grupo: 'Identificação', campo: 'cliente_nome', rotulo: 'Cliente', tipo: 'texto' },
   { grupo: 'Identificação', campo: 'tipo_projeto', rotulo: 'Tipo de projeto', tipo: 'texto' },
@@ -138,7 +137,7 @@ function Entrada({ c, valor, onChange, onVeiculo, onCep, currentUser }: { c: Cam
   if (c.tipo === 'dias') return <input type="text" inputMode="numeric" autoComplete="off" maxLength={4} placeholder="Ex.: 30" value={valor} onChange={e => onChange(somenteDigitos(e.target.value))} className="acn-oe-campo" aria-label={c.rotulo} />;
   if (c.tipo === 'moeda') return <CampoMoeda value={valor} onChange={reais => onChange(reais)} className="acn-input acn-oe-campo" aria-label={c.rotulo} />;
   return (
-    <input type={c.tipo === 'data' ? 'date' : c.tipo === 'numero' ? 'number' : 'text'} inputMode={c.tipo === 'moeda' ? 'decimal' : undefined}
+    <input type={c.tipo === 'data' ? 'date' : c.tipo === 'numero' ? 'number' : 'text'} inputMode={(c.tipo as string) === 'moeda' ? 'decimal' : undefined}
       value={valor} onChange={e => onChange(e.target.value)} className="acn-oe-campo" aria-label={c.rotulo} />
   );
 }
@@ -384,7 +383,7 @@ export function ModalEditarOplLote({ ops, currentUser, onClose, onSalvo }) {
 // regra de desmembrar o lote quando a quantidade aumenta. Aqui é só o
 // formulário — por isso o componente é controlado (form + onCampo).
 // ─────────────────────────────────────────────────────────────────────────────
-type TipoCampoCom = 'texto' | 'textarea' | 'numero' | 'dias' | 'moeda' | 'data' | 'select' | 'centro' | 'colaborador' | 'bool' | 'multi' | 'veiculo';
+type TipoCampoCom = 'texto' | 'textarea' | 'numero' | 'dias' | 'moeda' | 'data' | 'select' | 'centro' | 'colaborador' | 'bool' | 'multi' | 'veiculo' | 'cep' | 'telefone';
 type CampoCom = {
   campo: string; rotulo: string; tipo: TipoCampoCom; grupo: string;
   opcoes?: { valor: string; label: string }[];

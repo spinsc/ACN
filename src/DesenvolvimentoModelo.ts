@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // DESENVOLVIMENTO DE PRODUTO NA ENGENHARIA — o modelo (D1 do PLANO_DESENVOLVIMENTO_ENGENHARIA.md, 19/10/2026)
 //
@@ -204,7 +203,7 @@ export function observarEtapa(d: any, idx: number, u: any, texto: string, agora:
 }
 
 /** Mexe em UM entregável (feito, nota, anexos). Fechado enquanto a porta espera decisão: mudar depois do pedido invalidaria quem já olhou. */
-export function atualizarEntregavel(d: any, idx: number, id: string, u: any, agora: string, mudar: (e: any) => string | void) {
+export function atualizarEntregavel(d: any, idx: number, id: string, u: any, agora: string, mudar: (e: any, etapa?: any) => string | void) {
   const p = preparar(d, idx); if (p.erro) return p;
   const { etapas, etapa } = p;
   if (etapa.status !== 'em_andamento') return { erro: 'A etapa não está em andamento.' };
@@ -519,7 +518,7 @@ export function limparDados(id: string, dados: any) {
 
 export function salvarDados(d: any, idx: number, id: string, dados: any, u: any, agora: string) {
   if (!temFormulario(id)) return { erro: 'Este entregável não tem formulário.' };
-  const limpo = limparDados(id, dados);
+  const limpo: Record<string, any> = limparDados(id, dados);
   return atualizarEntregavel(d, idx, id, u, agora, (e, etapa) => {
     if (id === 'desenhos') {
       // revisões só se acrescentam (como no PLM: o que já foi liberado como Rev A não se reescreve; mudou, é Rev B)
