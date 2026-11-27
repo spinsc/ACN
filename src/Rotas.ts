@@ -58,7 +58,7 @@ export type TipoDeRegistro = 'op' | 'viagem' | 'demanda';
 const PALAVRA_DO_REGISTRO: Record<TipoDeRegistro, string> = { op: 'op', viagem: 'viagem', demanda: 'demanda' };
 
 /** Os registros que moram DENTRO de uma tela (Fase 3): a palavra de cada um no endereço, depois do nome da tela. */
-export type TipoDeRegistroDaTela = 'licitacao' | 'card' | 'pedido' | 'os' | 'servico' | 'ficha' | 'tarefa' | 'ofi';   // `ofi` = a ordem de fabricação interna (Fase 6, 26/11/2026; mora nas filas de Serralheria, Chicotes e Laboratório); `tarefa` = a tarefa do Financeiro (Fase 6, 26/11/2026); `servico` = o serviço de terceiro (Fase 5, 26/11/2026); `ficha` = a ficha de atendimento em garantia (Fase 6, 26/11/2026)
+export type TipoDeRegistroDaTela = 'licitacao' | 'card' | 'pedido' | 'os' | 'servico' | 'ficha' | 'tarefa' | 'ofi' | 'vistoria';   // `vistoria` = a ficha (janela VER) da vistoria de pátio (Fase 6, 26/11/2026); `ofi` = a ordem de fabricação interna (Fase 6, 26/11/2026; mora nas filas de Serralheria, Chicotes e Laboratório); `tarefa` = a tarefa do Financeiro (Fase 6, 26/11/2026); `servico` = o serviço de terceiro (Fase 5, 26/11/2026); `ficha` = a ficha de atendimento em garantia (Fase 6, 26/11/2026)
 
 /** Quais registros cada tela conhece (id interno da tela → as palavras que valem depois do nome dela). Tela que não está aqui não tem endereço de registro. */
 export const REGISTROS_DAS_TELAS: Readonly<Record<string, readonly TipoDeRegistroDaTela[]>> = {
@@ -67,6 +67,7 @@ export const REGISTROS_DAS_TELAS: Readonly<Record<string, readonly TipoDeRegistr
   compras: ['pedido'],
   sac: ['os', 'ficha'],   // a ficha da Garantia mora na aba Garantia do SAC (a palavra não pode ser `garantia`: é o nome da aba)
   terceiros: ['servico'],
+  vistorias: ['vistoria'],   // a ficha da vistoria de pátio (janela VER); o retorno e o formulário de saída seguem pelo recado (decidido com o usuário em 26/11/2026)
   serralheria: ['ofi'],   // a OFI (ordem de fabricação interna) mora na fila de cada setor que fabrica: o endereço é o do setor DESTINO dela, e a palavra não colide com as abas (demandas, relatorios)
   chicotes: ['ofi'],
   laboratorio: ['ofi'],

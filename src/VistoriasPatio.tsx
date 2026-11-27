@@ -8,7 +8,8 @@ import { logChange, useFieldHighlight, useUnreadMap } from './AuditSystem';
 import { hojeISO, diaISO, Faixa, Botao, Selo } from './Interface';
 import { confirmar } from './Feedback';
 import Icone from './Icone';
-import { mdiCarSearchOutline, mdiMapMarkerPath, mdiHistory, mdiFilePdfBox } from '@mdi/js';
+import { mdiCarSearchOutline, mdiMapMarkerPath, mdiHistory, mdiFilePdfBox, mdiLink } from '@mdi/js';
+import { useRegistroNoEndereco, lerPorCodigo, copiarLinkDoRegistroComAviso } from './RegistroNoEndereco';   // 26/11/2026 (Fase 6 do plano de endereços): a ficha da vistoria aberta tem endereço próprio
 import { ligarSaida } from './TerceirosVistoria';
 
 // Etapa 12e8 (05/10/2026): a parte visual desta tela passou para as peças do design system (Botao, Selo, a janela do sistema, o
@@ -130,6 +131,7 @@ function ModalVerVistoria({ vistoria: v, onClose, currentUser, fmtDt, gerarPDF }
       <div className="modal-box acn-modal-cadastro acn-vis-jan">
         <div className="acn-modal-cab">
           <span className="modal-title">Vistoria — {v.veiculo_placa}</span>
+          <Botao variante="discreto" pequeno icone={mdiLink} aria-label="Copiar o link desta vistoria" title="Copiar o link desta vistoria para colar numa mensagem ou e-mail" onClick={() => copiarLinkDoRegistroComAviso('vistorias', 'vistoria', v.id, 'da vistoria')} />
         </div>
         <div className="acn-modal-corpo">
           {/* o realce vindo da auditoria (campo alterado e ainda não visto) é dinâmico: continua como estilo da linha */}
@@ -215,6 +217,15 @@ export default function VistoriasPatio({ currentUser }) {
   const [terceiroLigado, setTerceiroLigado] = useState(null);
 
   useEffect(() => { fetchAll(); }, []);
+  // 26/11/2026 (plano de endereços e rotas, Fase 6): a ficha da vistoria (janela VER) tem endereço próprio, `#/vistorias/vistoria/<código>` (F5, Voltar, Avançar e link colado abrem a mesma ficha).
+  // Decidido com o usuário: só a ficha; o formulário de saída e a janela de retorno (com km e assinatura digitados) seguem pelo recado de sempre. Lê a vistoria pelo código, sem esperar a lista.
+  useRegistroNoEndereco({
+    tela: 'vistorias', tipo: 'vistoria', rotulo: 'a vistoria de pátio',
+    aberto: modalVer?.id ? String(modalVer.id) : null,
+    ler: (chave) => lerPorCodigo(supabase.from('vistorias_patio').select('*').eq('id', chave).maybeSingle()),
+    mostrar: (v) => setModalVer(v),
+    fechar: () => setModalVer(null),
+  });
   // 23/11/2026 (Serviços de terceiros, T5): o botão "Registrar a saída" da janela do serviço chega aqui com a saída já preenchida (prestador como destino, documento da OP e previsão de retorno)
   // em window.__acnDeepLink.vistoriaNova. Só abre o formulário e preenche: quem confere placa, responsável, fotos e assinaturas continua sendo quem registra. Não precisa da lista carregada.
   useEffect(() => {

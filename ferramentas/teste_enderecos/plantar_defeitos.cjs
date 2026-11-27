@@ -374,6 +374,24 @@ const DEFEITOS = [
   { id: 'og', nome: 'a OFI não se fecha quando o endereço deixa de ser o dela (o Voltar não a fecha)', cenarios: '^C96', trocas: [
     { arquivo: 'src/SetorDemandaTab.tsx', de: "fechar: () => setModalVerOfi(null),", para: "fechar: () => {}," },
   ] },
+  { id: 'va', nome: 'a tela das vistorias deixa de conhecer a ficha como registro (o endereço #/vistorias/vistoria/<código> não é lido)', cenarios: '^C(9[78]|99|100)', trocas: [
+    { arquivo: 'src/Rotas.ts', de: "  vistorias: ['vistoria'],", para: "  // vistorias: ['vistoria']," },
+  ] },
+  { id: 'vb', nome: 'o clique no VER não escreve o endereço da ficha (a janela abre, a barra continua na tela)', cenarios: '^C97', trocas: [
+    { arquivo: 'src/VistoriasPatio.tsx', de: "aberto: modalVer?.id ? String(modalVer.id) : null,", para: "aberto: null," },
+  ] },
+  { id: 'vc', nome: 'a janela da ficha perde o botão "Copiar link"', cenarios: '^C100', trocas: [
+    { arquivo: 'src/VistoriasPatio.tsx', de: "<Botao variante=\"discreto\" pequeno icone={mdiLink} aria-label=\"Copiar o link desta vistoria\"", para: "<Botao style={{ display: 'none' }} aria-label=\"x\" data-defeito=\"1\"" },
+  ] },
+  { id: 'vd', nome: 'a ficha não se fecha quando o endereço deixa de ser o dela (o Voltar não a fecha)', cenarios: '^C97', trocas: [
+    { arquivo: 'src/VistoriasPatio.tsx', de: "fechar: () => setModalVer(null),", para: "fechar: () => {}," },
+  ] },
+  { id: 've', nome: 'o link colado não abre a ficha (a leitura pelo código responde sempre "não encontrei")', cenarios: '^C98', trocas: [
+    { arquivo: 'src/VistoriasPatio.tsx', de: "ler: (chave) => lerPorCodigo(supabase.from('vistorias_patio').select('*').eq('id', chave).maybeSingle()),", para: "ler: async () => ({ registro: null, erro: '' })," },
+  ] },
+  { id: 'vf', nome: 'a leitura recusada da ficha vira "não encontrei" (esconde que o banco falhou)', cenarios: '^C99', trocas: [
+    { arquivo: 'src/VistoriasPatio.tsx', de: "ler: (chave) => lerPorCodigo(supabase.from('vistorias_patio').select('*').eq('id', chave).maybeSingle()),", para: "ler: async (chave) => { const r = await lerPorCodigo(supabase.from('vistorias_patio').select('*').eq('id', chave).maybeSingle()); return { registro: r.registro, erro: '' }; }," },
+  ] },
 ];
 
 const md5 = (b) => crypto.createHash('md5').update(b).digest('hex');

@@ -151,9 +151,10 @@ async function mencionar(dest: any, registro: any, texto: string, user: any, cam
 async function resolverPedido(registro: any, user: any): Promise<string> {
   const falha = (e: any) => `Não foi possível retirar o aviso do pedido da caixa de Menções de quem aprova: ${motivoDe(e)}.`;
   try {
-    const { error } = await supabase.from('mencoes').update({
-      resolvida: true, resolvida_em: new Date().toISOString(), resolvida_por: user?.nome || null, lida: true,
-    }).eq('contexto', 'hora_extra').eq('contexto_id', String(registro.id)).eq('campo', 'aprovacao').eq('resolvida', false);
+    // 26/11/2026 (Etapa 17, onda 4d): o aviso é de cada aprovador; quem decide resolve o dos outros pela função do banco
+    const { error } = await supabase.rpc('mencoes_resolver_todos', {
+      p_contexto: 'hora_extra', p_contexto_id: String(registro.id), p_por: user?.nome || null, p_campo: 'aprovacao',
+    });
     return error ? falha(error) : '';
   } catch (e: any) {
     return falha(e);
