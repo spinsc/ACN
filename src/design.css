@@ -7898,3 +7898,18 @@ html body .modal-box.acn-modal-cadastro.acn-perf-jan { width: min(780px, 96vw); 
 .acn-avsa-item .acn-avs-tags { flex-wrap: wrap; align-items: center; }
 .acn-avsa-acoes { display: flex; justify-content: flex-end; gap: 4px; margin-top: 6px; }
 @media (max-width: 900px) { .acn-avsa { grid-template-columns: minmax(0, 1fr); } }
+
+/* ── 12e93 (27/11/2026): painel Plataformas do Admin (AdminPainelPlataformas) ──
+   Tabela do guia + janela de edição. Campo dentro de grade: coluna minmax(0, 1fr) e controle com largura 100% (regra do CLAUDE.md). */
+.acn-plat-barra { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.acn-plat .acn-faixa + .acn-faixa { margin-top: 8px; }
+.acn-plat-c { text-align: center; }
+.acn-plat-desc { color: var(--acn-ok); font-weight: 700; }
+.acn-plat-ret { color: var(--acn-bad); font-weight: 700; }
+.acn-plat-inativa td { opacity: .55; }
+.acn-plat-acoes { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
+html body .modal-box.acn-modal-cadastro.acn-plat-jan { width: min(560px, 96vw); max-width: 560px; }
+.acn-plat-campos { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: end; }
+.acn-plat-campos .form-group { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; min-width: 0; flex: 0 0 auto; }
+.acn-plat-campos .acn-input { width: 100%; min-width: 0; box-sizing: border-box; }
+@media (max-width: 560px) { .acn-plat-campos { grid-template-columns: minmax(0, 1fr); } }
