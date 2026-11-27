@@ -30,8 +30,13 @@ const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
 const sufixoNum = (opl) => { const m = (opl || '').match(/\/(\d+)$/); return m ? parseInt(m[1], 10) : 0; };
 
 import { podeCorrigirDataDaNota } from './utils/permissoes';
+import { Abas } from './Interface';
+import { useAbaNoEndereco } from './AbaNoEndereco';
+import FiscalCadastrosTela from './FiscalCadastrosTela';
+import FiscalConferidorTela from './FiscalConferidorTela';
 
-export default function FiscalTab({ currentUser }) {
+// O que era a tela inteira do Fiscal virou a aba "Faturamento" (26/11/2026, preparação do módulo fiscal): nada dentro dela mudou.
+function FaturamentoDoFiscal({ currentUser }) {
   const [opls, setOpls] = useState([]);
   const [ordensOS, setOrdensOS] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -963,6 +968,24 @@ export default function FiscalTab({ currentUser }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// A casca do Fiscal (26/11/2026, preparação do módulo fiscal): três abas. O faturamento de sempre, os cadastros que a nota vai exigir e o conferidor de XML.
+// Cada aba tem endereço (#/fiscal, #/fiscal/cadastros, #/fiscal/conferidor) e a segunda ainda se divide em quatro visões (FiscalCadastrosTela).
+export default function FiscalTab({ currentUser }) {
+  const [aba, setAba] = useAbaNoEndereco({ tela: 'fiscal' }) as [string, (v: any) => void];
+  return (
+    <div>
+      <Abas ativa={aba} onChange={setAba} itens={[
+        { id: 'faturamento', rotulo: 'Faturamento', titulo: 'As OPs e OS que esperam a nota, a emissão e a entrega' },
+        { id: 'cadastros', rotulo: 'Cadastros fiscais', titulo: 'Empresas emitentes, transportadoras e o que falta nos clientes e nos itens para a nota sair' },
+        { id: 'conferidor', rotulo: 'Conferidor de XML', titulo: 'Solte XMLs de notas emitidas e veja o que está errado (só leitura)' },
+      ]} />
+      {aba === 'faturamento' && <FaturamentoDoFiscal currentUser={currentUser} />}
+      {aba === 'cadastros' && <FiscalCadastrosTela currentUser={currentUser} />}
+      {aba === 'conferidor' && <FiscalConferidorTela />}
     </div>
   );
 }
