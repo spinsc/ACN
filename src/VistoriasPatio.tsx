@@ -1,6 +1,8 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
+import { enviarArquivoPrivado, urlDoArquivo } from './ArquivoPrivado';   // 26/11/2026 (Etapa 17, onda 5b): as assinaturas moram no bucket PRIVADO
+import { ImagemPrivada } from './ArquivoPrivadoTela';
 import { confirmarRemocao } from './Feedback';
 import React, { useState, useEffect, useRef } from 'react';
 import { DemandaFooter } from './AcnTabShared';
@@ -163,19 +165,19 @@ function ModalVerVistoria({ vistoria: v, onClose, currentUser, fmtDt, gerarPDF }
             {v.assinatura_envio_url && (
               <div>
                 <div className="acn-ajuda">Assinatura Envio:</div>
-                <img src={v.assinatura_envio_url} alt="sig envio" className="acn-vis-sig-ver" />
+                <ImagemPrivada valor={v.assinatura_envio_url} alt="sig envio" className="acn-vis-sig-ver" />
               </div>
             )}
             {v.assinatura_recebimento_url && (
               <div>
                 <div className="acn-ajuda">Assinatura Recebimento:</div>
-                <img src={v.assinatura_recebimento_url} alt="sig receb" className="acn-vis-sig-ver" />
+                <ImagemPrivada valor={v.assinatura_recebimento_url} alt="sig receb" className="acn-vis-sig-ver" />
               </div>
             )}
             {v.assinatura_retorno_url && (
               <div>
                 <div className="acn-ajuda">Assinatura Retorno:</div>
-                <img src={v.assinatura_retorno_url} alt="sig retorno" className="acn-vis-sig-ver" />
+                <ImagemPrivada valor={v.assinatura_retorno_url} alt="sig retorno" className="acn-vis-sig-ver" />
               </div>
             )}
           </div>}
@@ -287,10 +289,9 @@ export default function VistoriasPatio({ currentUser }) {
     try {
       const blob = await (await fetch(dataUrl)).blob();
       const path = `assinaturas/vistoria_${name}_${Date.now()}.png`;
-      const { error } = await supabase.storage.from('acn-media').upload(path, blob, { contentType:'image/png', upsert:true });
-      if (error) throw error;
-      const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-      return pub?.publicUrl;
+      const { valor, erro } = await enviarArquivoPrivado(path, blob, 'image/png');
+      if (erro) throw erro;
+      return valor;
     } catch(e) { console.warn(e); throw new Error('a assinatura (' + explicarErroDeEnvio(e) + ')'); }
   };
 
@@ -440,7 +441,9 @@ export default function VistoriasPatio({ currentUser }) {
       doc.setFontSize(8); doc.text(label, x, yPos);
       if (url) {
         try {
-          const resp = await fetch(url);
+          const endereco = await urlDoArquivo(url);   // assinatura privada: o endereço assinado é pedido na hora de montar o PDF
+          if (!endereco) throw new Error('assinatura indisponível');
+          const resp = await fetch(endereco);
           const blob = await resp.blob();
           const dataUrl = await new Promise(r => { const fr = new FileReader(); fr.onload=e=>r(e.target.result); fr.readAsDataURL(blob); });
           doc.addImage(dataUrl, 'PNG', x, yPos+2, 80, 22);

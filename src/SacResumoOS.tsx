@@ -7,6 +7,7 @@ import { copiarLinkDoRegistroComAviso } from './RegistroNoEndereco';   // 26/11/
 import { QuadroComprasLigadas } from './ComprasLigadas';
 import { QuadroServicosLigados } from './TerceirosLigados';
 import { progressoDaOS } from './SacFluxo';
+import { LinkDeArquivo } from './ArquivoPrivadoTela';   // 26/11/2026 (Etapa 17, onda 5b): assinatura no bucket privado, aberta por endereço assinado
 import { ViagensLigadas } from './ViagemVinculos';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -181,8 +182,8 @@ export default function SacResumoOS({ os, onClose, onAcompanhamento, currentUser
               <div className="acn-quadro-titulo">Arquivos e fotos</div>
               <div className="acn-srs-arquivos">
                 {arquivos.map((a: any, i: number) => <a key={'a' + i} href={a.url} target="_blank" rel="noreferrer">{a.nome || 'Arquivo ' + (i + 1)}</a>)}
-                {os.assinatura_aprovacao_url && <a href={os.assinatura_aprovacao_url} target="_blank" rel="noreferrer">Assinatura da aprovação</a>}
-                {os.assinatura_saida_url && <a href={os.assinatura_saida_url} target="_blank" rel="noreferrer">Assinatura da saída</a>}
+                {os.assinatura_aprovacao_url && <LinkDeArquivo valor={os.assinatura_aprovacao_url}>Assinatura da aprovação</LinkDeArquivo>}
+                {os.assinatura_saida_url && <LinkDeArquivo valor={os.assinatura_saida_url}>Assinatura da saída</LinkDeArquivo>}
                 {lista(os.fotos_entrada).length > 0 && <span className="acn-fraco">{lista(os.fotos_entrada).length} foto(s) de entrada</span>}
                 {lista(os.fotos_saida).length > 0 && <span className="acn-fraco">{lista(os.fotos_saida).length} foto(s) de saída</span>}
               </div>
