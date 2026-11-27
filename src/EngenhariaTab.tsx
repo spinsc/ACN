@@ -29,6 +29,8 @@ import { indicePendencias, frasePendenciasNaoLidas } from './OpPendencias';
 import { MenuAcoes, Faixa, Botao, Abas, Selo, Tag, diaBR } from './Interface';
 import Icone from './Icone';
 import { useAbaNoEndereco } from './AbaNoEndereco';
+import { aoMudarEndereco, enderecoAtual } from './EnderecoDoNavegador';
+import { registroDaTelaNoEndereco } from './Rotas';
 import {
   mdiRulerSquareCompass, mdiCogOutline, mdiPuzzleOutline, mdiTimerOutline, mdiTrayArrowUp, mdiWrenchOutline, mdiCheckCircleOutline, mdiClockAlertOutline,
   mdiPauseCircleOutline, mdiEyeOutline, mdiNoteTextOutline, mdiPowerPlugOutline, mdiArrowULeftTop, mdiLinkVariant, mdiPlayOutline, mdiClipboardTextOutline,
@@ -111,6 +113,12 @@ export default function EngenhariaTab({ currentUser }) {
   // resultado de "Desenvolvimento (Engenharia)" troca pra essa sub-aba e
   // pré-preenche a busca local com o mesmo termo digitado.
   const [buscaDeepLink, setBuscaDeepLink] = useState('');
+  // Fase 6 (26/11/2026): a demanda do Desenvolvimento (`#/engenharia/projeto/<código>`) mora na aba Desenvolvimento: com a tela já aberta em outra aba, o endereço dela troca para essa aba, que lê o endereço e abre a janela.
+  useEffect(() => {
+    const sincronizar = () => { if (registroDaTelaNoEndereco(enderecoAtual(), 'engenharia')?.tipo === 'projeto') setAbaEng('desenvolvimento'); };
+    sincronizar();
+    return aoMudarEndereco(sincronizar, { internas: true });
+  }, []);
   useEffect(() => {
     const handler = (e) => {
       setAbaEng('desenvolvimento');

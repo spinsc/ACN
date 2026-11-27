@@ -392,6 +392,33 @@ const DEFEITOS = [
   { id: 'vf', nome: 'a leitura recusada da ficha vira "não encontrei" (esconde que o banco falhou)', cenarios: '^C99', trocas: [
     { arquivo: 'src/VistoriasPatio.tsx', de: "ler: (chave) => lerPorCodigo(supabase.from('vistorias_patio').select('*').eq('id', chave).maybeSingle()),", para: "ler: async (chave) => { const r = await lerPorCodigo(supabase.from('vistorias_patio').select('*').eq('id', chave).maybeSingle()); return { registro: r.registro, erro: '' }; }," },
   ] },
+  { id: 'pa', nome: 'a tela da Engenharia deixa de conhecer a demanda como registro (o endereço #/engenharia/projeto/<código> não é lido)', cenarios: '^C10[2-6]', trocas: [
+    { arquivo: 'src/Rotas.ts', de: "  engenharia: ['projeto'],", para: "  // engenharia: ['projeto']," },
+  ] },
+  { id: 'pb', nome: 'o botão "Abrir em janela" não escreve o endereço da demanda (a janela abre, a barra continua na tela)', cenarios: '^C102', trocas: [
+    { arquivo: 'src/DesenvolvimentoPecasTab.tsx', de: "    aberto: abertaId,", para: "    aberto: null," },
+  ] },
+  { id: 'pc', nome: 'a janela da demanda perde o botão "Copiar link"', cenarios: '^C105', trocas: [
+    { arquivo: 'src/DesenvolvimentoPecasTab.tsx', de: "aria-label=\"Copiar o link desta demanda\"", para: "aria-label=\"x\" style={{ display: 'none' }}" },
+  ] },
+  { id: 'pd', nome: 'a janela não se fecha quando o endereço deixa de ser o dela (o Voltar não a fecha)', cenarios: '^C102', trocas: [
+    { arquivo: 'src/DesenvolvimentoPecasTab.tsx', de: "    fechar: () => setAbertaId(null),", para: "    fechar: () => {}," },
+  ] },
+  { id: 'pe', nome: 'o link colado não abre a demanda (a leitura pelo código responde sempre "não encontrei")', cenarios: '^C103', trocas: [
+    { arquivo: 'src/DesenvolvimentoPecasTab.tsx', de: "    ler: (chave) => lerPorCodigo(supabase.from('engenharia_desenvolvimento').select('*').eq('id', chave).maybeSingle()),", para: "    ler: async () => ({ registro: null, erro: '' })," },
+  ] },
+  { id: 'pf', nome: 'a leitura recusada da demanda vira "não encontrei" (esconde que o banco falhou)', cenarios: '^C104', trocas: [
+    { arquivo: 'src/DesenvolvimentoPecasTab.tsx', de: "    ler: (chave) => lerPorCodigo(supabase.from('engenharia_desenvolvimento').select('*').eq('id', chave).maybeSingle()),", para: "    ler: async (chave) => { const r = await lerPorCodigo(supabase.from('engenharia_desenvolvimento').select('*').eq('id', chave).maybeSingle()); return { registro: r.registro, erro: '' }; }," },
+  ] },
+  { id: 'pg', nome: 'com outra aba da Engenharia aberta, o endereço da demanda não troca para a aba Desenvolvimento', cenarios: '^C105', trocas: [
+    { arquivo: 'src/EngenhariaTab.tsx', de: "?.tipo === 'projeto') setAbaEng('desenvolvimento'); };", para: "?.tipo === 'projeto') void 0; };" },
+  ] },
+  { id: 'ph', nome: 'a data de uma etapa do Desenvolvimento deixa de abrir a demanda pelo botão "Abrir" do Calendário', cenarios: '^C106', trocas: [
+    { arquivo: 'src/CalendarioAviso.ts', de: "  desenvolvimento_etapa: 'desenvolvimento',", para: "  // desenvolvimento_etapa: 'desenvolvimento'," },
+  ] },
+  { id: 'pi', nome: 'o recado da Menção (contexto desenvolvimento) deixa de virar o endereço da demanda', cenarios: '^C106', trocas: [
+    { arquivo: 'src/Rotas.ts', de: "  desenvolvimento: { tela: 'engenharia', tipo: 'projeto' },", para: "  // desenvolvimento: { tela: 'engenharia', tipo: 'projeto' }," },
+  ] },
 ];
 
 const md5 = (b) => crypto.createHash('md5').update(b).digest('hex');
