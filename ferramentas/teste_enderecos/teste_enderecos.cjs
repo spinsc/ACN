@@ -3859,6 +3859,160 @@ const marcarHistoricoInicial = (page) => page.evaluateOnNewDocument(() => { if (
     confere('o botão Fechar tira o endereço da OFI (volta ao da tela)', e.janelas === 0 && e.hash === '#/serralheria', JSON.stringify({ j: e.janelas, h: e.hash }));
   });
 
+  // ═════════ a ficha da vistoria de pátio (`#/vistorias/vistoria/<código>`, a janela VER) — Fase 6 ═════════
+  // Só a ficha tem endereço (decidido com o usuário em 26/11/2026): o formulário de saída e a janela de retorno seguem pelo recado antigo (C101 confere que continuam abrindo e sem endereço).
+  // As vistorias e a leitura de uma são SIMULADAS (o banco de produção tem 20 vistorias reais).
+  const MSG_V_NAO_ACHOUP = 'Não foi possível abrir a vistoria de pátio: não a encontrei, ou você não tem acesso a ela.';
+  const JVP = '.acn-vis-jan';
+  const vistoriaFalsaP = (n, extra = {}) => ({
+    id: '0000000e-0000-4000-8000-00000000000' + n, tipo_servico: 'Lavagem', tipo_documento: 'Sem Documento', numero_documento: '', solicitante: 'ZZ Solicitante', veiculo_placa: 'ZZT' + n + 'A23',
+    veiculo_modelo: 'ZZ Modelo ' + n, km_saida: 1000, destino: 'ZZ Destino', responsavel_envio: 'ZZTESTE', data_saida: '2026-11-20T12:00:00Z', previsao_retorno: '2026-11-30',
+    status: 'Retornou', data_retorno: '2026-11-21T12:00:00Z', km_retorno: 1010, responsavel_recebimento: 'ZZTESTE', obs_retorno: '', observacoes: '', fotos_saida: [],
+    ...extra,
+  });
+  const V1P = vistoriaFalsaP(1), V2P = vistoriaFalsaP(2), V_EM_CAMPOP = vistoriaFalsaP(3, { status: 'Saiu', data_retorno: null, km_retorno: null, responsavel_recebimento: null });
+  const bancoDeVistoriasP = (vistorias, { recusa = () => false, lidas = [] } = {}) => (url, r) => {
+    if (r.method() !== 'GET') return null;
+    if (url.includes('/rest/v1/vistorias_patio?')) {
+      if (url.includes('id=eq.')) {
+        const m = url.match(/id=eq\.([^&]+)/); const id = m ? m[1] : '';
+        lidas.push(id);
+        if (recusa(id)) return { status: 500, body: { message: 'erro simulado do banco' } };
+        const v = vistorias.find(x => x.id === id);
+        return { status: 200, body: v ? [v] : [] };
+      }
+      return { status: 200, body: vistorias };
+    }
+    return null;
+  };
+  const estadoVP = (page) => page.evaluate((jv) => {
+    const j = document.querySelector(jv);
+    return {
+      hash: location.hash, titulo: document.title, historico: history.length, marca: !!(history.state && history.state.acn === 1),
+      janelas: document.querySelectorAll(jv).length, vistoria: j ? (j.querySelector('.modal-title') || { innerText: null }).innerText : null,
+      retorno: [...document.querySelectorAll('.modal-title')].some(x => /Registrar Retorno/.test(x.innerText)), origem: location.origin + location.pathname,
+    };
+  }, JVP);
+  const esperarVistoriaP = (page, ms = 40000) => page.waitForSelector(JVP, { timeout: ms });
+  const esperarSemVistoriaP = (page, ms = 15000) => page.waitForFunction((s) => !document.querySelector(s), { timeout: ms }, JVP);
+  const fecharVistoriaP = (page) => page.evaluate((s) => { const b = [...document.querySelectorAll(s + ' button')].find(x => x.innerText.trim() === 'Fechar'); if (!b) throw new Error('não achei o botão Fechar da vistoria'); b.click(); }, JVP);
+  const esperarDesfechoVP = (page, ms = 25000) => page.waitForFunction(() => !/^#\/vistorias\/vistoria\//i.test(location.hash), { timeout: ms }).catch(() => {});
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C97 Vistoria de pátio: o clique no VER escreve o endereço; Voltar fecha, Avançar reabre e o Fechar volta um passo', { simular: bancoDeVistoriasP([V1P, V2P, V_EM_CAMPOP]) }, async ({ page }) => {
+    await page.goto(BASE + '#/vistorias', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await page.waitForSelector('.acn-acoes-linha', { timeout: 40000 }); await espera(900);
+    const antes = await estadoVP(page);
+    confere('a tela abre sem janela e sem endereço de registro', antes.janelas === 0 && antes.hash === '#/vistorias', JSON.stringify({ j: antes.janelas, h: antes.hash }));
+    await page.evaluate(() => { const b = [...document.querySelectorAll('.acn-acoes-linha button')].find(x => x.innerText.trim() === 'VER'); b.click(); });
+    await esperarVistoriaP(page); await espera(900);
+    let e = await estadoVP(page);
+    const id = (e.hash.match(/^#\/vistorias\/vistoria\/(.+)$/) || [])[1];
+    confere('o clique escreve o endereço da vistoria aberta, um passo novo no histórico, e a janela é uma só', !!id && [V1P.id, V2P.id, V_EM_CAMPOP.id].includes(id) && e.janelas === 1 && e.historico === antes.historico + 1 && e.marca === true, JSON.stringify({ h: e.hash, j: e.janelas, hist: e.historico, antes: antes.historico }));
+    await page.goBack(); await esperarSemVistoriaP(page); await espera(900);
+    e = await estadoVP(page);
+    confere('o Voltar fecha a ficha e volta a #/vistorias', e.janelas === 0 && e.hash === '#/vistorias', JSON.stringify({ j: e.janelas, h: e.hash }));
+    await page.goForward(); await esperarVistoriaP(page); await espera(900);
+    e = await estadoVP(page);
+    confere('o Avançar reabre a mesma ficha', e.janelas === 1 && e.hash === '#/vistorias/vistoria/' + id, JSON.stringify({ j: e.janelas, h: e.hash }));
+    const h1 = e.historico;
+    await fecharVistoriaP(page); await esperarSemVistoriaP(page); await espera(900);
+    e = await estadoVP(page);
+    confere('o Fechar tira o endereço da ficha (um passo atrás)', e.janelas === 0 && e.hash === '#/vistorias', JSON.stringify({ j: e.janelas, h: e.hash, h1, hist: e.historico }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C98 Vistoria de pátio: link colado (primeira página) abre a ficha; F5 reabre; o Fechar nunca sai do sistema', { simular: bancoDeVistoriasP([V1P, V2P, V_EM_CAMPOP]) }, async ({ page }) => {
+    const end = '#/vistorias/vistoria/' + V2P.id;
+    await page.goto(BASE + end, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarVistoriaP(page); await espera(900);
+    let e = await estadoVP(page);
+    const origem = e.origem, h0 = e.historico;
+    confere('o link abre a ficha certa, uma só, e o endereço continua o do link (não é reescrito)', e.hash === end && e.janelas === 1 && /ZZT2A23/.test(e.vistoria || '') && e.marca === false, JSON.stringify({ h: e.hash, j: e.janelas, v: e.vistoria, m: e.marca }));
+    await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await esperarVistoriaP(page); await espera(900);
+    e = await estadoVP(page);
+    confere('F5 reabre a mesma ficha, no mesmo endereço', e.hash === end && e.janelas === 1 && /ZZT2A23/.test(e.vistoria || ''), JSON.stringify({ h: e.hash, j: e.janelas, v: e.vistoria }));
+    await fecharVistoriaP(page); await esperarSemVistoriaP(page); await espera(900);
+    e = await estadoVP(page);
+    confere('fechar troca o endereço pelo da tela, sem sair do sistema nem criar passo', e.hash === '#/vistorias' && e.janelas === 0 && e.origem === origem && e.historico === h0, JSON.stringify({ h: e.hash, j: e.janelas, o: e.origem, hist: e.historico, h0 }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  {
+    let modo = 'normal';
+    const lidas = [];
+    const banco = bancoDeVistoriasP([V1P], { lidas, recusa: () => modo === 'recusa' });
+    await cenario('C99 Vistoria que não existe, que não é código e com a leitura recusada: UMA mensagem, sem janela, endereço limpo', { simular: (url, r) => banco(url, r) }, async ({ page }) => {
+      const casos = [
+        ['não existe (código válido)', 'normal', UUID_INEXISTENTE, true, MSG_V_NAO_ACHOUP],
+        ['não é um código (texto)', 'normal', 'ZZNAOEXISTE9999', false, MSG_V_NAO_ACHOUP],
+        ['o banco recusa a leitura', 'recusa', V1P.id, true, 'Não foi possível abrir a vistoria de pátio: a leitura falhou (erro simulado do banco). Tente de novo.'],
+      ];
+      for (const [nome, m, codigo, leBanco, texto] of casos) {
+        modo = m; lidas.length = 0;
+        await LA(page).catch(() => {});
+        await abrirComoLinkColado(page, '#/vistorias/vistoria/' + codigo);
+        await esperarSistema(page); await esperarDesfechoVP(page); await espera(800);
+        const e = await estadoVP(page);
+        const al = await A(page);
+        const msgs = al.filter(x => x.startsWith('Não foi possível abrir a vistoria de pátio'));
+        confere(`vistoria (${nome}): UMA mensagem, a certa`, msgs.length === 1 && msgs[0] === texto, JSON.stringify(al));
+        confere(`vistoria (${nome}): nenhuma janela e o endereço volta ao da tela`, e.janelas === 0 && e.hash === '#/vistorias', JSON.stringify({ j: e.janelas, h: e.hash }));
+        confere(`vistoria (${nome}): ${leBanco ? 'perguntou ao banco' : 'nem perguntou ao banco (um texto que não é código não existe)'}`, leBanco ? lidas.length >= 1 : lidas.length === 0, JSON.stringify(lidas));
+        await LA(page);
+        modo = 'normal';
+        await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await espera(1500);
+        const depois = await A(page);
+        confere(`vistoria (${nome}): o F5 depois disso não avisa de novo`, depois.length === 0, JSON.stringify(depois));
+      }
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C100 Vistoria de pátio: "Copiar link" na janela da ficha', { simular: bancoDeVistoriasP([V1P, V2P]) }, async ({ page }) => {
+    await instalarClipboardDeTeste(page);
+    await page.goto(BASE + '#/vistorias/vistoria/' + V1P.id, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarVistoriaP(page); await espera(900);
+    const SEL = JVP + ' button[aria-label="Copiar o link desta vistoria"]';
+    const existe = await page.evaluate((s) => !!document.querySelector(s), SEL);
+    confere('a janela tem o botão "Copiar link"', existe, SEL);
+    if (existe) {
+      const clicar = async () => { await page.evaluate((s) => document.querySelector(s).click(), SEL); await espera(900); };
+      const completo = BASE + '#/vistorias/vistoria/' + V1P.id;
+      const ok = 'Link da vistoria copiado. É só colar na mensagem ou no e-mail.';
+      await page.evaluate(() => { window.__copiado.length = 0; window.__modoCopia = 'moderna'; });
+      await LA(page); await clicar();
+      let al = await A(page);
+      const copiado = await page.evaluate(() => window.__copiado);
+      confere('copia o endereço COMPLETO (base atual + #/vistorias/vistoria/<código>)', copiado.length === 1 && copiado[0] === completo, JSON.stringify(copiado) + ' esperado ' + completo);
+      confere('avisa que copiou', al.length === 1 && al[0] === ok, JSON.stringify(al));
+      await page.evaluate(() => { window.__modoCopia = 'falha'; });
+      await LA(page); await clicar();
+      al = await A(page);
+      confere('as duas formas falham: mensagem de erro que manda copiar da barra', al.length === 1 && al[0] === 'Não foi possível copiar o link da vistoria. Copie o endereço que está na barra do navegador.', JSON.stringify(al));
+      const e = await estadoVP(page);
+      confere('copiar não mexeu no endereço nem fechou a janela', e.hash === '#/vistorias/vistoria/' + V1P.id && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+    }
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // o que NÃO mudou: o botão "Registrar retorno" da Logística chega por recado (`vistoriaRetorno`), abre a janela de retorno e não escreve endereço
+  await cenario('C101 Vistoria de pátio: o recado do retorno (Logística) continua abrindo a janela de retorno, sem endereço de ficha', { simular: bancoDeVistoriasP([V1P, V_EM_CAMPOP]) }, async ({ page }) => {
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(2000);
+    await page.evaluate((id) => { window.__acnDeepLink = { vistoriaRetorno: id }; window.dispatchEvent(new CustomEvent('acn:ir-para-aba', { detail: { aba: 'vistorias' } })); }, V_EM_CAMPOP.id);
+    await page.waitForFunction(() => [...document.querySelectorAll('.modal-title')].some(x => /Registrar Retorno/.test(x.innerText)), { timeout: 40000 });
+    await espera(600);
+    const e = await estadoVP(page);
+    confere('a janela de retorno abre na tela das vistorias, sem janela de ficha e sem endereço de registro', e.retorno === true && e.janelas === 0 && e.hash === '#/vistorias', JSON.stringify({ r: e.retorno, j: e.janelas, h: e.hash }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
   console.log('\n══════════ RESUMO ══════════');
   const falhas = resultados.filter(r => !r.ok);
   console.log(`${resultados.length - falhas.length} de ${resultados.length} conferências passaram; ${falhas.length} falharam`);
