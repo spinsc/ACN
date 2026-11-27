@@ -17,8 +17,11 @@ import { confirmar, pedirTexto } from './Feedback';
 import { hojeISO, diaISO, Faixa, Botao, Chips, Abas, Selo } from './Interface';
 import Icone from './Icone';
 import { useAbaNoEndereco } from './AbaNoEndereco';
+import { useRegistroNoEndereco, lerPorCodigo, copiarLinkDoRegistroComAviso } from './RegistroNoEndereco';   // 26/11/2026 (Fase 6 do plano de endereços): a OFI aberta tem endereço próprio
+import { aoMudarEndereco, enderecoAtual } from './EnderecoDoNavegador';
+import { registroDaTelaNoEndereco } from './Rotas';
 import {
-  mdiFactory, mdiLinkVariant, mdiPlayOutline, mdiCheckCircleOutline, mdiPlay, mdiPause, mdiWrenchOutline, mdiMagnify, mdiPrinterOutline, mdiClockOutline, mdiChevronUp, mdiChevronDown, mdiMicroscope, mdiCartOutline, mdiCashMultiple, mdiCalendarOutline, mdiTagOutline, mdiPaperclip, mdiReceiptTextOutline, mdiAccountWrenchOutline,
+  mdiFactory, mdiLinkVariant, mdiPlayOutline, mdiCheckCircleOutline, mdiPlay, mdiPause, mdiWrenchOutline, mdiMagnify, mdiPrinterOutline, mdiClockOutline, mdiChevronUp, mdiChevronDown, mdiMicroscope, mdiCartOutline, mdiCashMultiple, mdiCalendarOutline, mdiTagOutline, mdiPaperclip, mdiReceiptTextOutline, mdiAccountWrenchOutline, mdiLink,
 } from '@mdi/js';
 import { CampoMoeda } from './CampoMoeda';
 // Serviços de terceiros (T2, 23/11/2026): a janela de pedir o serviço, aberta pelo botão da Serralheria (importação preguiçosa que não divide o pacote: ver o comentário do AcnTabShared)
@@ -43,7 +46,7 @@ const SAC_STATUS_FAMILIA = {
 // Mostrada só para setores que fabricam internamente (Chicotes/Serralheria/
 // Laboratorio) — recebe pedidos roteados pelo PCP a partir da Solicitação de
 // Reposição do Almoxarifado (ver AlmoxarifadoTab.tsx/PCPTab.tsx).
-function OfiQueueSection({ setor, cor, currentUser }) {
+function OfiQueueSection({ setor, cor, currentUser, telaEndereco = '' }) {
   const [ofis, setOfis] = useState<any[]>([]);
   const [modalVerOfi, setModalVerOfi] = useState<any>(null);
   const [atualizando, setAtualizando] = useState<string|null>(null);
@@ -61,25 +64,19 @@ function OfiQueueSection({ setor, cor, currentUser }) {
 
   useEffect(() => { fetchOfis(); const t = intervaloVisivel(fetchOfis, 30000); return () => clearInterval(t); }, [setor]);
 
-  // Deep-link — ver VinculoPicker.tsx's abrirVinculo(). Guardado por
-  // setor_destino porque cada setor monta sua própria instância deste
-  // componente, todas ouvindo o mesmo evento global 'acn:abrir-registro'.
-  useEffect(() => {
-    const tentarAbrir = () => {
-      const pend = (window as any).__acnDeepLink;
-      if (!pend || pend.contexto !== 'ofi') return;
-      supabase.from('ofis').select('*').eq('id', pend.contextoId).maybeSingle()
-        .then(({ data }) => {
-          if (data && data.setor_destino === setor) {
-            (window as any).__acnDeepLink = null;
-            setModalVerOfi(data);
-          }
-        });
-    };
-    tentarAbrir();
-    window.addEventListener('acn:abrir-registro', tentarAbrir);
-    return () => window.removeEventListener('acn:abrir-registro', tentarAbrir);
-  }, [setor]);
+  // 26/11/2026 (plano de endereços e rotas, Fase 6): a OFI aberta tem endereço próprio, `#/chicotes/ofi/<código>` (o setor é o DESTINO dela; F5, Voltar, Avançar, link colado e o vínculo
+  // "OFI" de uma demanda ou de uma compra abrem a mesma janela). Antes o vínculo gravava um recado e esta fila o lia. OFI de outro setor responde como se não existisse (a mesma
+  // regra de sempre: cada setor só abre a sua), e leitura que falha diz que falhou, nunca "não encontrei". Só vale quando a fila é a da tela inteira (`telaEndereco`).
+  useRegistroNoEndereco({
+    tela: telaEndereco || '__sem_endereco__', tipo: 'ofi', rotulo: 'a ordem de fabricação interna',
+    aberto: telaEndereco && modalVerOfi?.id ? String(modalVerOfi.id) : null,
+    ler: async (chave) => {
+      const r = await lerPorCodigo(supabase.from('ofis').select('*').eq('id', chave).maybeSingle());
+      return r.registro && r.registro.setor_destino !== setor ? { registro: null, erro: '' } : r;
+    },
+    mostrar: (o) => setModalVerOfi(o),
+    fechar: () => setModalVerOfi(null),
+  });
 
   const avancarStatus = async (ofi: any) => {
     const proximo = ofi.status === 'Pendente' ? 'Em Andamento' : 'Concluida';
@@ -135,6 +132,7 @@ function OfiQueueSection({ setor, cor, currentUser }) {
           <div className="modal-box acn-modal-cadastro acn-set-ver" role="dialog" aria-label="Ordem de fabricação interna">
             <div className="acn-modal-cab">
               <span className="modal-title">{modalVerOfi.numero_ofi} — {modalVerOfi.setor_destino}</span>
+              {telaEndereco && <Botao variante="discreto" pequeno icone={mdiLink} aria-label="Copiar o link desta OFI" title="Copiar o link desta OFI para colar numa mensagem ou e-mail" onClick={() => copiarLinkDoRegistroComAviso(telaEndereco, 'ofi', modalVerOfi.id, 'da OFI')} />}
             </div>
             <div className="acn-modal-corpo">
               <div>{modalVerOfi.descricao} · {modalVerOfi.quantidade}</div>
@@ -359,7 +357,14 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
   const [loading, setLoading]         = useState(false);
   const [filtro, setFiltro]           = useState('Todos');
   const [mostrarConcluidas, setMostrarConcluidas] = useState(false);
-  const [abaAtiva, setAbaAtiva]       = useAbaNoEndereco({ tela: telaEndereco }) as [string, (v: any) => void];
+  const [abaAtiva, setAbaAtiva]       = useAbaNoEndereco({ tela: telaEndereco, inicial: () => (telaEndereco && registroDaTelaNoEndereco(enderecoAtual(), telaEndereco)?.tipo === 'ofi' ? 'demandas' : null) }) as [string, (v: any) => void];
+  // Fase 6 (26/11/2026): a OFI mora na fila da aba Demandas; com a tela já aberta (na aba Relatórios, por exemplo), um endereço de OFI troca para ela, que lê o endereço e abre a janela.
+  useEffect(() => {
+    if (!telaEndereco) return;
+    const sincronizar = () => { if (registroDaTelaNoEndereco(enderecoAtual(), telaEndereco)?.tipo === 'ofi') setAbaAtiva('demandas'); };
+    sincronizar();
+    return aoMudarEndereco(sincronizar, { internas: true });
+  }, [telaEndereco]);
   const [tick, setTick]               = useState(0);
   const [pedindoTerceiro, setPedindoTerceiro] = useState(false);   // janela "Solicitar serviço de terceiro" (só na Serralheria, T2 de Serviços de terceiros, 23/11/2026)
 
@@ -998,7 +1003,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
           {cardDemandas}
 
           {['Chicotes','Serralheria','Laboratorio'].includes(setor) && (
-            <OfiQueueSection setor={setor} cor={cor} currentUser={currentUser} />
+            <OfiQueueSection setor={setor} cor={cor} currentUser={currentUser} telaEndereco={telaEndereco} />
           )}
 
           {/* Recebe demandas endereçadas por PCPTab.tsx/AjustesProjetoTab.tsx

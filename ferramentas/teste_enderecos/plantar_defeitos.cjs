@@ -353,6 +353,27 @@ const DEFEITOS = [
   { id: 'th', nome: 'a tarefa não se fecha quando o endereço deixa de ser o dela (o Voltar não a fecha)', cenarios: '^C88', trocas: [
     { arquivo: 'src/FinanceiroKanban.tsx', de: 'fechar: () => setModalTarefa(null),', para: 'fechar: () => {},' },
   ] },
+  { id: 'oa', nome: 'a tela do Chicotes deixa de conhecer a OFI como registro (o endereço #/chicotes/ofi/<código> não é lido)', cenarios: '^C9[3-6]', trocas: [
+    { arquivo: 'src/Rotas.ts', de: "  chicotes: ['ofi'],\n", para: "" },
+  ] },
+  { id: 'ob', nome: 'a OFI de outro setor abre na tela errada (a leitura não confere o setor destino)', cenarios: '^C94', trocas: [
+    { arquivo: 'src/SetorDemandaTab.tsx', de: "r.registro && r.registro.setor_destino !== setor ? { registro: null, erro: '' } : r;", para: "r;" },
+  ] },
+  { id: 'oc', nome: 'a janela da OFI perde o botão "Copiar link"', cenarios: '^C95', trocas: [
+    { arquivo: 'src/SetorDemandaTab.tsx', de: "{telaEndereco && <Botao variante=\"discreto\" pequeno icone={mdiLink} aria-label=\"Copiar o link desta OFI\"", para: "{false && <Botao variante=\"discreto\" pequeno icone={mdiLink} aria-label=\"Copiar o link desta OFI\"" },
+  ] },
+  { id: 'od', nome: 'com a aba Relatórios aberta, o endereço de uma OFI não troca para as Demandas', cenarios: '^C95', trocas: [
+    { arquivo: 'src/SetorDemandaTab.tsx', de: "?.tipo === 'ofi') setAbaAtiva('demandas'); };", para: "?.tipo === 'ofi') { /* defeito: não troca de aba */ } };" },
+  ] },
+  { id: 'oe', nome: 'o vínculo "OFI" (recado) deixa de virar endereço (a tela do setor abre, mas a janela da OFI não)', cenarios: '^C96', trocas: [
+    { arquivo: 'src/Rotas.ts', de: "  ofi: { tela: ['serralheria', 'chicotes', 'laboratorio'], tipo: 'ofi' },\n", para: "" },
+  ] },
+  { id: 'of', nome: 'a OFI aberta não escreve o endereço (a janela abre, a barra continua na tela)', cenarios: '^C9[36]', trocas: [
+    { arquivo: 'src/SetorDemandaTab.tsx', de: "aberto: telaEndereco && modalVerOfi?.id ? String(modalVerOfi.id) : null,", para: "aberto: null," },
+  ] },
+  { id: 'og', nome: 'a OFI não se fecha quando o endereço deixa de ser o dela (o Voltar não a fecha)', cenarios: '^C96', trocas: [
+    { arquivo: 'src/SetorDemandaTab.tsx', de: "fechar: () => setModalVerOfi(null),", para: "fechar: () => {}," },
+  ] },
 ];
 
 const md5 = (b) => crypto.createHash('md5').update(b).digest('hex');

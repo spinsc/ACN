@@ -7742,3 +7742,49 @@ html body .acn-label.acn-lote-titulo-dados { margin-bottom: 2px; }
 
 /* 26/11/2026 (lentidão): a linha que aparece enquanto o arquivo de uma tela vem do servidor (CarregarTela.tsx) */
 .acn-carregando-tela { padding: 16px 0; color: var(--acn-muted); font-size: 14px; }
+/* ── 12e83 (26/11/2026): os quatro painéis de configuração pequenos do Admin (AdminPaineisConfig.tsx): Config. Email, Config. Cotações, Faixas de Markup e Config. NFC ──────────────
+   Saíram os 50 `style` soltos e os cabeçalhos `sec-header`, que não tinham CSS nenhum (o título aparecia como texto solto); as cores de ardósia, verde e azul escritas à mão viraram os tokens do guia
+   (o escuro vem dos tokens de `body.dark`). A letra pequena (8 a 11px no `style`) ficava em 12 a 13px depois do ajuste em execução (TonsVisuais): 12px para dica e 13px para texto é o que a pessoa já via.
+   O interruptor das Cotações era uma `div` que só respondia ao mouse; agora é uma caixa de seleção (`role="switch"`) com a mesma aparência. Campo dentro de grade segue a regra do CLAUDE.md
+   (coluna `minmax(0, 1fr)`, controle com `width: 100%; min-width: 0`); no celular a grade de duas colunas vira uma só. */
+.acn-adm-cfg > .sec-body { padding: 14px 16px; }
+.acn-adm-cfg-ajuda { margin: 0 0 14px; font-size: 13px; line-height: 1.5; color: var(--acn-muted); }
+.acn-adm-cfg-ok { color: var(--acn-ok); font-weight: 700; }
+.acn-adm-cfg-campo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; align-content: start; margin-bottom: 12px; }
+.acn-adm-cfg-campo .acn-label { margin: 0; }
+.acn-adm-cfg-campo .acn-input { width: 100%; min-width: 0; box-sizing: border-box; }
+.acn-adm-cfg-dica { font-size: 12px; color: var(--acn-muted); }
+.acn-adm-cfg-grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 10px; }
+.acn-adm-cfg-grade.dois-um { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+@media (max-width: 640px) { .acn-adm-cfg-grade, .acn-adm-cfg-grade.dois-um { grid-template-columns: minmax(0, 1fr); } }
+.acn-adm-cfg-rodape { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+.acn-adm-cfg-teste { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--acn-line); }
+.acn-adm-cfg-teste .acn-adm-cfg-teste-campo { width: 220px; max-width: 100%; box-sizing: border-box; }
+/* faixas de markup: um cartão por tipo de negócio */
+.acn-adm-mk-tipo { margin-bottom: 10px; padding: 10px 12px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-adm-mk-linha { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.acn-adm-mk-nome { min-width: 90px; font-size: 14px; color: var(--acn-ink); }
+.acn-adm-mk-rot { display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--acn-text); }
+.acn-input.acn-adm-mk-num { width: 70px; min-width: 0; box-sizing: border-box; }
+/* visibilidade das cotações: uma linha por campo, com o interruptor à direita */
+.acn-adm-cot-linha { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; padding: 10px 12px; border: 1px solid var(--acn-line); border-radius: var(--acn-r3); background: var(--acn-surface-2); cursor: pointer; }
+.acn-adm-cot-linha.ativo { border-color: color-mix(in srgb, var(--acn-ok) 40%, var(--acn-line)); background: var(--acn-ok-soft); }
+.acn-adm-cot-texto { display: grid; gap: 2px; min-width: 0; }
+.acn-adm-cot-texto b { font-size: 14px; font-weight: 700; color: var(--acn-ink); }
+.acn-adm-cot-texto small { font-size: 12px; color: var(--acn-muted); }
+.acn-adm-cot-estado { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.acn-adm-cot-rotulo { font-size: 12px; font-weight: 700; color: var(--acn-muted); }
+.acn-adm-cot-linha.ativo .acn-adm-cot-rotulo { color: var(--acn-ok); }
+/* o fundo leva !important porque o remendo do DashboardTab pinta TODO input de branco (e de azul-marinho no escuro) com !important (Etapa 13) */
+input.acn-adm-cot-chave { appearance: none; -webkit-appearance: none; position: relative; flex-shrink: 0; width: 36px; height: 20px; margin: 0; border: 0; border-radius: 10px; cursor: pointer; transition: background .2s; }
+html body .acn-main input.acn-adm-cot-chave { background: color-mix(in srgb, var(--acn-neutral) 45%, var(--acn-surface)) !important; }
+input.acn-adm-cot-chave::after { content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .27); transition: left .2s; }
+html body .acn-main input.acn-adm-cot-chave:checked { background: var(--acn-ok) !important; }
+input.acn-adm-cot-chave:checked::after { left: 19px; }
+input.acn-adm-cot-chave:focus-visible { outline: 2px solid var(--acn-brand); outline-offset: 2px; }
+input.acn-adm-cot-chave:disabled { opacity: .5; cursor: not-allowed; }
+.acn-adm-cot-desconto { margin: 12px 0 14px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--acn-info) 35%, var(--acn-line)); border-radius: var(--acn-r3); background: var(--acn-info-soft); }
+.acn-adm-cot-desconto-titulo { margin-bottom: 6px; font-size: 14px; font-weight: 700; color: var(--acn-info); }
+.acn-adm-cot-desconto-ajuda { margin-bottom: 8px; font-size: 12px; color: var(--acn-text); }
+.acn-adm-cot-desconto-campo { display: flex; align-items: center; gap: 8px; }
+.acn-input.acn-adm-cot-desconto-input { width: 100px; min-width: 0; box-sizing: border-box; }
