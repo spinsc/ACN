@@ -58,7 +58,7 @@ export type TipoDeRegistro = 'op' | 'viagem' | 'demanda';
 const PALAVRA_DO_REGISTRO: Record<TipoDeRegistro, string> = { op: 'op', viagem: 'viagem', demanda: 'demanda' };
 
 /** Os registros que moram DENTRO de uma tela (Fase 3): a palavra de cada um no endereço, depois do nome da tela. */
-export type TipoDeRegistroDaTela = 'licitacao' | 'card' | 'pedido' | 'os' | 'servico' | 'ficha' | 'tarefa';   // `tarefa` = a tarefa do Financeiro (Fase 6, 26/11/2026); `servico` = o serviço de terceiro (Fase 5, 26/11/2026); `ficha` = a ficha de atendimento em garantia (Fase 6, 26/11/2026)
+export type TipoDeRegistroDaTela = 'licitacao' | 'card' | 'pedido' | 'os' | 'servico' | 'ficha' | 'tarefa' | 'ofi';   // `ofi` = a ordem de fabricação interna (Fase 6, 26/11/2026; mora nas filas de Serralheria, Chicotes e Laboratório); `tarefa` = a tarefa do Financeiro (Fase 6, 26/11/2026); `servico` = o serviço de terceiro (Fase 5, 26/11/2026); `ficha` = a ficha de atendimento em garantia (Fase 6, 26/11/2026)
 
 /** Quais registros cada tela conhece (id interno da tela → as palavras que valem depois do nome dela). Tela que não está aqui não tem endereço de registro. */
 export const REGISTROS_DAS_TELAS: Readonly<Record<string, readonly TipoDeRegistroDaTela[]>> = {
@@ -67,6 +67,9 @@ export const REGISTROS_DAS_TELAS: Readonly<Record<string, readonly TipoDeRegistr
   compras: ['pedido'],
   sac: ['os', 'ficha'],   // a ficha da Garantia mora na aba Garantia do SAC (a palavra não pode ser `garantia`: é o nome da aba)
   terceiros: ['servico'],
+  serralheria: ['ofi'],   // a OFI (ordem de fabricação interna) mora na fila de cada setor que fabrica: o endereço é o do setor DESTINO dela, e a palavra não colide com as abas (demandas, relatorios)
+  chicotes: ['ofi'],
+  laboratorio: ['ofi'],
   financeiro: ['tarefa'],   // a tarefa mora na aba Tarefas (`kanban`) do Financeiro; a palavra não colide com nenhuma aba da tela
 };
 
@@ -361,7 +364,7 @@ export function ehCodigoInterno(chave: unknown): boolean {
  * O recado interno de "abrir isto" (`window.__acnDeepLink`: contexto + id) que as Menções, o chat, os avisos e os vínculos gravam antes de trocar de tela, traduzido para o
  * registro que ele pede. Só os quatro tipos da Fase 3. O nome do contexto não é o da tela: o card do CRM é `crm`, a compra é `compra`, a OS é `sac`.
  */
-const REGISTRO_DO_CONTEXTO: Readonly<Record<string, { tela: string; tipo: TipoDeRegistroDaTela; dica?: string }>> = {
+const REGISTRO_DO_CONTEXTO: Readonly<Record<string, { tela: string | readonly string[]; tipo: TipoDeRegistroDaTela; dica?: string }>> = {
   crm: { tela: 'crm', tipo: 'card' },
   licitacao: { tela: 'licitacoes', tipo: 'licitacao' },
   compra: { tela: 'compras', tipo: 'pedido' },
@@ -375,7 +378,11 @@ const REGISTRO_DO_CONTEXTO: Readonly<Record<string, { tela: string; tipo: TipoDe
   garantia: { tela: 'sac', tipo: 'ficha' },
   // Fase 6 (26/11/2026): a Menção e o aviso do Calendário de uma tarefa do Financeiro trazem o id da tarefa
   tarefa_financeiro: { tela: 'financeiro', tipo: 'tarefa' },
+  // Fase 6 (26/11/2026): o vínculo "OFI" (de uma demanda, de uma compra…) já troca para a tela do setor destino da OFI; o recado vale para qualquer uma das três telas que fabricam
+  ofi: { tela: ['serralheria', 'chicotes', 'laboratorio'], tipo: 'ofi' },
 };
+
+function telasDoAlvo(tela: string | readonly string[]): readonly string[] { return typeof tela === 'string' ? [tela] : tela; }
 
 /**
  * O registro que o recado pede, SE ele é de `tela` (a tela para onde a pessoa está indo) e traz um código interno de verdade; senão `null` (o recado fica como está, para quem o lê).
@@ -387,7 +394,7 @@ export function registroDoRecado(recado: unknown, tela: string): RegistroDaTela 
   const nome = String(contexto ?? '');
   if (!Object.prototype.hasOwnProperty.call(REGISTRO_DO_CONTEXTO, nome)) return null;
   const alvo = REGISTRO_DO_CONTEXTO[nome];
-  if (alvo.tela !== tela) return null;
+  if (!telasDoAlvo(alvo.tela).includes(tela)) return null;
   const chave = String(contextoId ?? '').trim();
   return ehCodigoInterno(chave) ? { tela, tipo: alvo.tipo, chave, ...(alvo.dica ? { dica: alvo.dica } : {}) } : null;
 }
@@ -464,7 +471,7 @@ export function conferirQuadroDeNomes(ids: readonly string[]): string[] {
     for (const t of tipos) if (PALAVRAS_RESERVADAS.includes(t)) problemas.push(`o registro "${t}" da tela "${tela}" usa uma palavra reservada`);
   }
   for (const [contexto, alvo] of Object.entries(REGISTRO_DO_CONTEXTO)) {
-    if (!REGISTROS_DAS_TELAS[alvo.tela]?.includes(alvo.tipo)) problemas.push(`o recado "${contexto}" aponta para ${alvo.tela}/${alvo.tipo}, que a tela não conhece`);
+    for (const t of telasDoAlvo(alvo.tela)) if (!REGISTROS_DAS_TELAS[t]?.includes(alvo.tipo)) problemas.push(`o recado "${contexto}" aponta para ${t}/${alvo.tipo}, que a tela não conhece`);
   }
   problemas.push(...conferirQuadroDeAbas(ids));
   return problemas;

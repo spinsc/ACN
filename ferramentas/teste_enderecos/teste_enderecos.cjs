@@ -3677,6 +3677,188 @@ const marcarHistoricoInicial = (page) => page.evaluateOnNewDocument(() => { if (
     confere('nenhum aviso', al.length === 0, JSON.stringify(al));
   });
 
+  // ═════════ a OFI, ordem de fabricação interna (`#/<setor>/ofi/<código>`, DENTRO da tela do setor destino: Serralheria, Chicotes ou Laboratório) — Fase 6 ═════════
+  // O banco de produção não tem nenhuma OFI (0 linhas em 26/11/2026): as OFIs são SIMULADAS. A janela só se abre pelo endereço (link, Voltar, F5, vínculo "OFI" de outro registro): a fila não tem clique que a abra.
+  const MSG_O_NAO_ACHOU = 'Não foi possível abrir a ordem de fabricação interna: não a encontrei, ou você não tem acesso a ela.';
+  const JO = '[role="dialog"][aria-label="Ordem de fabricação interna"]';
+  const ofiFalsa = (n, extra = {}) => ({
+    id: '0000000d-0000-4000-8000-00000000000' + n, numero_ofi: 'OFI-ZZ' + n, setor_destino: 'Chicotes', descricao: 'ZZ OFI do teste ' + n, quantidade: 3, status: 'Pendente',
+    origem: 'almoxarifado', origem_id: '1', vinculo_tipo: null, vinculo_id: null, vinculo_descricao: null, criado_em: '2026-11-20T12:00:00Z',
+    ...extra,
+  });
+  const O1 = ofiFalsa(1), O2 = ofiFalsa(2), DE_OUTRO_SETOR = ofiFalsa(3, { setor_destino: 'Serralheria' });
+  /** O que o banco "responde" sobre as OFIs: a fila do setor (só GET `?select=*&setor_destino=eq.<setor>`) e a leitura de uma só (lista de zero ou uma linha, como o `.maybeSingle()` pede). */
+  const bancoDeOfis = (ofis, { recusa = () => false, lidas = [] } = {}) => (url, r) => {
+    if (r.method() !== 'GET') return null;
+    if (url.includes('/rest/v1/ofis?')) {
+      if (url.includes('id=eq.')) {
+        const m = url.match(/id=eq\.([^&]+)/); const id = m ? m[1] : '';
+        lidas.push(id);
+        if (recusa(id)) return { status: 500, body: { message: 'erro simulado do banco' } };
+        const o = ofis.find(x => x.id === id);
+        return { status: 200, body: o ? [o] : [] };
+      }
+      const s = url.match(/setor_destino=eq\.([^&]+)/);
+      const setor = s ? decodeURIComponent(s[1]) : null;
+      return { status: 200, body: ofis.filter(o => !setor || o.setor_destino === setor) };
+    }
+    return null;
+  };
+  const estadoO = (page) => page.evaluate((jo) => {
+    const aba = document.querySelector('.acn-main [role="tab"][aria-selected="true"]');
+    const j = document.querySelector(jo);
+    return {
+      hash: location.hash, titulo: document.title, historico: history.length, marca: !!(history.state && history.state.acn === 1),
+      janelas: document.querySelectorAll(jo).length, ofi: j ? (j.querySelector('.modal-title') || { innerText: null }).innerText : null,
+      abaAtiva: aba ? aba.innerText.replace(/\s+\d+$/, '').trim() : '', origem: location.origin + location.pathname,
+    };
+  }, JO);
+  const esperarOfi = (page, ms = 40000) => page.waitForSelector(JO, { timeout: ms });
+  const esperarSemOfi = (page, ms = 15000) => page.waitForFunction((s) => !document.querySelector(s), { timeout: ms }, JO);
+  const fecharOfi = (page) => page.evaluate((s) => { const b = [...document.querySelectorAll(s + ' button')].find(x => x.innerText.trim() === 'Fechar'); if (!b) throw new Error('não achei o botão Fechar da OFI'); b.click(); }, JO);
+  const esperarDesfechoO = (page, ms = 25000) => page.waitForFunction(() => !/^#\/[a-z-]+\/ofi\//i.test(location.hash), { timeout: ms }).catch(() => {});
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C93 OFI: link colado (primeira página) abre a OFI na aba Demandas do setor; F5 reabre; o Fechar nunca sai do sistema', { simular: bancoDeOfis([O1, O2]) }, async ({ page }) => {
+    const end = '#/chicotes/ofi/' + O1.id;
+    await page.goto(BASE + end, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarOfi(page); await espera(900);
+    let e = await estadoO(page);
+    const origem = e.origem, h0 = e.historico;
+    confere('o link abre a OFI certa, uma só, e o endereço continua o do link (não é reescrito)', e.hash === end && e.janelas === 1 && /OFI-ZZ1/.test(e.ofi || ''), JSON.stringify({ h: e.hash, j: e.janelas, o: e.ofi }));
+    confere('a aba aberta é a das Demandas (a fila de OFI mora nela) e o passo do link colado não é do sistema', /Demandas/i.test(e.abaAtiva) && e.marca === false, JSON.stringify({ a: e.abaAtiva, m: e.marca }));
+    await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await esperarOfi(page); await espera(900);
+    e = await estadoO(page);
+    confere('F5 reabre a mesma OFI, no mesmo endereço', e.hash === end && e.janelas === 1 && /OFI-ZZ1/.test(e.ofi || ''), JSON.stringify({ h: e.hash, j: e.janelas, o: e.ofi }));
+    await fecharOfi(page); await esperarSemOfi(page); await espera(900);
+    e = await estadoO(page);
+    confere('fechar troca o endereço pelo da tela do setor, sem sair do sistema nem criar passo', e.hash === '#/chicotes' && e.janelas === 0 && e.origem === origem && e.historico === h0, JSON.stringify({ h: e.hash, j: e.janelas, o: e.origem, hist: e.historico, h0 }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  {
+    let modo = 'normal';
+    const lidas = [];
+    const banco = bancoDeOfis([O1, DE_OUTRO_SETOR], { lidas, recusa: () => modo === 'recusa' });
+    await cenario('C94 OFI que não existe, que não é código, de OUTRO setor e com a leitura recusada: UMA mensagem, sem janela, endereço limpo', { simular: (url, r) => banco(url, r) }, async ({ page }) => {
+      const casos = [
+        ['não existe (código válido)', 'normal', UUID_INEXISTENTE, true, MSG_O_NAO_ACHOU],
+        ['não é um código (texto)', 'normal', 'ZZNAOEXISTE9999', false, MSG_O_NAO_ACHOU],
+        ['é de outro setor (Serralheria, aberta pelo Chicotes)', 'normal', DE_OUTRO_SETOR.id, true, MSG_O_NAO_ACHOU],
+        ['o banco recusa a leitura', 'recusa', O1.id, true, 'Não foi possível abrir a ordem de fabricação interna: a leitura falhou (erro simulado do banco). Tente de novo.'],
+      ];
+      for (const [nome, m, codigo, leBanco, texto] of casos) {
+        modo = m; lidas.length = 0;
+        await LA(page).catch(() => {});
+        await abrirComoLinkColado(page, '#/chicotes/ofi/' + codigo);
+        await esperarSistema(page); await esperarDesfechoO(page); await espera(800);
+        const e = await estadoO(page);
+        const al = await A(page);
+        const msgs = al.filter(x => x.startsWith('Não foi possível abrir a ordem de fabricação interna'));
+        confere(`OFI (${nome}): UMA mensagem, a certa`, msgs.length === 1 && msgs[0] === texto, JSON.stringify(al));
+        confere(`OFI (${nome}): nenhuma janela e o endereço volta ao da tela do setor`, e.janelas === 0 && e.hash === '#/chicotes', JSON.stringify({ j: e.janelas, h: e.hash }));
+        confere(`OFI (${nome}): ${leBanco ? 'perguntou ao banco' : 'nem perguntou ao banco (um texto que não é código não existe)'}`, leBanco ? lidas.length >= 1 : lidas.length === 0, JSON.stringify(lidas));
+        await LA(page);
+        modo = 'normal';
+        await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await espera(1500);
+        const depois = await A(page);
+        confere(`OFI (${nome}): o F5 depois disso não avisa de novo`, depois.length === 0, JSON.stringify(depois));
+      }
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C95 OFI: "Copiar link"; aberta com a aba Relatórios do setor aberta troca para as Demandas; Voltar e Avançar entre a aba e a OFI', { simular: bancoDeOfis([O1, O2]) }, async ({ page }) => {
+    await instalarClipboardDeTeste(page);
+    await page.goto(BASE + '#/chicotes/ofi/' + O1.id, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarOfi(page); await espera(900);
+    const SEL = JO + ' button[aria-label="Copiar o link desta OFI"]';
+    const existe = await page.evaluate((s) => !!document.querySelector(s), SEL);
+    confere('a janela tem o botão "Copiar link"', existe, SEL);
+    if (existe) {
+      const clicar = async () => { await page.evaluate((s) => document.querySelector(s).click(), SEL); await espera(900); };
+      const completo = BASE + '#/chicotes/ofi/' + O1.id;
+      const ok = 'Link da OFI copiado. É só colar na mensagem ou no e-mail.';
+      await page.evaluate(() => { window.__copiado.length = 0; window.__modoCopia = 'moderna'; });
+      await LA(page); await clicar();
+      let al = await A(page);
+      const copiado = await page.evaluate(() => window.__copiado);
+      confere('copia o endereço COMPLETO (base atual + #/chicotes/ofi/<código>)', copiado.length === 1 && copiado[0] === completo, JSON.stringify(copiado) + ' esperado ' + completo);
+      confere('avisa que copiou', al.length === 1 && al[0] === ok, JSON.stringify(al));
+      await page.evaluate(() => { window.__modoCopia = 'falha'; });
+      await LA(page); await clicar();
+      al = await A(page);
+      confere('as duas formas falham: mensagem de erro que manda copiar da barra', al.length === 1 && al[0] === 'Não foi possível copiar o link da OFI. Copie o endereço que está na barra do navegador.', JSON.stringify(al));
+      const e = await estadoO(page);
+      confere('copiar não mexeu no endereço nem fechou a janela', e.hash === '#/chicotes/ofi/' + O1.id && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+    }
+    await LA(page);
+    // com a aba Relatórios do setor aberta, o endereço de uma OFI troca para as Demandas e abre a OFI; o Voltar volta aos Relatórios
+    await page.goto(BASE + '#/chicotes/relatorios', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(2500);
+    let e = await estadoO(page);
+    confere('a aba Relatórios abre sem janela (#/chicotes/relatorios)', e.hash === '#/chicotes/relatorios' && e.janelas === 0 && /Relat/i.test(e.abaAtiva), JSON.stringify({ h: e.hash, j: e.janelas, a: e.abaAtiva }));
+    await page.evaluate((h) => { location.hash = h; }, '#/chicotes/ofi/' + O2.id);
+    await esperarOfi(page); await espera(900);
+    e = await estadoO(page);
+    confere('o endereço de uma OFI, com os Relatórios abertos, troca para as Demandas e abre a OFI', e.janelas === 1 && /OFI-ZZ2/.test(e.ofi || '') && /Demandas/i.test(e.abaAtiva) && e.hash === '#/chicotes/ofi/' + O2.id, JSON.stringify({ j: e.janelas, o: e.ofi, a: e.abaAtiva, h: e.hash }));
+    await page.goBack(); await esperarSemOfi(page); await espera(900);
+    e = await estadoO(page);
+    confere('o Voltar fecha a OFI e volta à aba Relatórios (#/chicotes/relatorios)', e.janelas === 0 && e.hash === '#/chicotes/relatorios' && /Relat/i.test(e.abaAtiva), JSON.stringify({ j: e.janelas, h: e.hash, a: e.abaAtiva }));
+    await page.goForward(); await esperarOfi(page); await espera(900);
+    e = await estadoO(page);
+    confere('o Avançar reabre a OFI, na aba Demandas', e.janelas === 1 && e.hash === '#/chicotes/ofi/' + O2.id && /Demandas/i.test(e.abaAtiva), JSON.stringify({ j: e.janelas, h: e.hash, a: e.abaAtiva }));
+    const al = await A(page);
+    confere('nenhum aviso no fim', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // o vínculo "OFI" de outro registro (recado interno + troca de tela do setor destino), em UM passo, e cada setor só abre a sua
+  await cenario('C96 OFI: o vínculo (recado) abre a OFI pelo endereço, na tela do setor destino, em UM passo; o recado de uma OFI de outro setor não abre nada', { simular: bancoDeOfis([O1, DE_OUTRO_SETOR]) }, async ({ page }) => {
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(2000);
+    const h0 = (await estadoO(page)).historico;
+    await page.evaluate((id) => { window.__acnDeepLink = { contexto: 'ofi', contextoId: id }; window.dispatchEvent(new CustomEvent('acn:ir-para-aba', { detail: { aba: 'chicotes' } })); }, O1.id);
+    await esperarOfi(page); await espera(900);
+    let e = await estadoO(page);
+    const recado = await page.evaluate(() => window.__acnDeepLink);
+    confere('o vínculo abre a OFI pelo endereço (#/chicotes/ofi/<código>), na aba Demandas, uma janela só', e.hash === '#/chicotes/ofi/' + O1.id && e.janelas === 1 && /OFI-ZZ1/.test(e.ofi || '') && /Demandas/i.test(e.abaAtiva), JSON.stringify({ h: e.hash, j: e.janelas, o: e.ofi, a: e.abaAtiva }));
+    confere('UM passo novo no histórico (a tela e a OFI num passo só) e o recado foi consumido', e.historico === h0 + 1 && !recado, JSON.stringify({ h0, h1: e.historico, recado }));
+    await page.goBack(); await esperarSemOfi(page); await espera(900);
+    e = await estadoO(page);
+    confere('o Voltar fecha a OFI e volta à tela anterior', e.janelas === 0 && !/\/ofi\//.test(e.hash), JSON.stringify({ j: e.janelas, h: e.hash }));
+    await LA(page);
+    // a OFI da Serralheria pedida na tela do Chicotes (setor errado): o endereço é da tela, a leitura confere o setor e a janela não abre
+    await page.evaluate((id) => { window.__acnDeepLink = { contexto: 'ofi', contextoId: id }; window.dispatchEvent(new CustomEvent('acn:ir-para-aba', { detail: { aba: 'chicotes' } })); }, DE_OUTRO_SETOR.id);
+    await espera(2500);
+    e = await estadoO(page);
+    confere('a OFI de outro setor, pedida na tela do Chicotes, não abre janela', e.janelas === 0, JSON.stringify({ j: e.janelas, h: e.hash }));
+    await LA(page);
+    await page.evaluate((id) => { window.__acnDeepLink = { contexto: 'ofi', contextoId: id }; window.dispatchEvent(new CustomEvent('acn:ir-para-aba', { detail: { aba: 'serralheria' } })); }, DE_OUTRO_SETOR.id);
+    await esperarOfi(page); await espera(900);
+    e = await estadoO(page);
+    confere('a mesma OFI pedida na tela da Serralheria abre pelo endereço da Serralheria', e.hash === '#/serralheria/ofi/' + DE_OUTRO_SETOR.id && e.janelas === 1 && /OFI-ZZ3/.test(e.ofi || ''), JSON.stringify({ h: e.hash, j: e.janelas, o: e.ofi }));
+    // com a tela do setor JÁ aberta (a fila continua montada), o vínculo abre a OFI por cima e o Voltar a fecha sem trocar de tela: quem fecha é o gancho, não o desmonte da fila
+    await page.goto(BASE + '#/serralheria', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(2500);
+    await LA(page);
+    await page.evaluate((id) => { window.__acnDeepLink = { contexto: 'ofi', contextoId: id }; window.dispatchEvent(new CustomEvent('acn:ir-para-aba', { detail: { aba: 'serralheria' } })); }, DE_OUTRO_SETOR.id);
+    await esperarOfi(page); await espera(900);
+    e = await estadoO(page);
+    confere('com a Serralheria já aberta, o vínculo abre a OFI pelo endereço da Serralheria', e.hash === '#/serralheria/ofi/' + DE_OUTRO_SETOR.id && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+    await page.goBack(); await esperarSemOfi(page); await espera(900);
+    e = await estadoO(page);
+    confere('o Voltar fecha a OFI e fica na tela da Serralheria (#/serralheria)', e.janelas === 0 && e.hash === '#/serralheria' && /Demandas/i.test(e.abaAtiva), JSON.stringify({ j: e.janelas, h: e.hash, a: e.abaAtiva }));
+    await page.goForward(); await esperarOfi(page); await espera(900);
+    e = await estadoO(page);
+    confere('o Avançar reabre a OFI na mesma tela', e.janelas === 1 && e.hash === '#/serralheria/ofi/' + DE_OUTRO_SETOR.id, JSON.stringify({ j: e.janelas, h: e.hash }));
+    await fecharOfi(page); await esperarSemOfi(page); await espera(900);
+    e = await estadoO(page);
+    confere('o botão Fechar tira o endereço da OFI (volta ao da tela)', e.janelas === 0 && e.hash === '#/serralheria', JSON.stringify({ j: e.janelas, h: e.hash }));
+  });
+
   console.log('\n══════════ RESUMO ══════════');
   const falhas = resultados.filter(r => !r.ok);
   console.log(`${resultados.length - falhas.length} de ${resultados.length} conferências passaram; ${falhas.length} falharam`);
