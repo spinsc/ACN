@@ -132,8 +132,8 @@ const U1 = '0b9f0c3e-2d4a-4a57-9f3e-3a6c6f5a1b11';
 const U2 = 'A1B2C3D4-0000-4000-8000-00000000AAAA';
 const comRegistro = (hash, tela, tipo, chave) => assert.deepEqual(lerEndereco(hash, IDS), { tipo: 'tela', tela, resto: [tipo, chave], registro: { tipo, chave } });
 const semRegistro = (hash, tela, resto) => assert.deepEqual(lerEndereco(hash, IDS), { tipo: 'tela', tela, resto });
-const REGISTROS_DE_TELA = [['licitacoes', 'licitacao'], ['crm', 'card'], ['compras', 'pedido'], ['sac', 'os'], ['sac', 'ficha'], ['terceiros', 'servico'], ['financeiro', 'tarefa']];   // o serviço de terceiro entrou na Fase 5; a ficha da Garantia (aba do SAC) na Fase 6
-t('a tabela dos registros conhece exatamente as cinco telas, cada uma com a sua palavra', () => assert.deepEqual(REGISTROS_DAS_TELAS, { licitacoes: ['licitacao'], crm: ['card'], compras: ['pedido'], sac: ['os', 'ficha'], terceiros: ['servico'], financeiro: ['tarefa'] }));
+const REGISTROS_DE_TELA = [['licitacoes', 'licitacao'], ['crm', 'card'], ['compras', 'pedido'], ['sac', 'os'], ['sac', 'ficha'], ['terceiros', 'servico'], ['financeiro', 'tarefa'], ['serralheria', 'ofi'], ['chicotes', 'ofi'], ['laboratorio', 'ofi']];   // a OFI mora nas três telas que fabricam (Fase 6); o serviço de terceiro entrou na Fase 5; a ficha da Garantia (aba do SAC) na Fase 6
+t('a tabela dos registros conhece exatamente as cinco telas, cada uma com a sua palavra', () => assert.deepEqual(REGISTROS_DAS_TELAS, { licitacoes: ['licitacao'], crm: ['card'], compras: ['pedido'], sac: ['os', 'ficha'], terceiros: ['servico'], financeiro: ['tarefa'], serralheria: ['ofi'], chicotes: ['ofi'], laboratorio: ['ofi'] }));
 t('toda tela da tabela dos registros existe no menu', () => Object.keys(REGISTROS_DAS_TELAS).forEach(id => assert.ok(IDS.includes(id), id)));
 t('as palavras dos registros não são palavras reservadas nem nomes de tela', () => Object.values(REGISTROS_DAS_TELAS).flat().forEach(p => { assert.ok(!PALAVRAS_RESERVADAS.includes(p), p); assert.equal(idDaTela(p, IDS), null, p); }));
 REGISTROS_DE_TELA.forEach(([tela, tipo]) => {
@@ -169,7 +169,7 @@ t('uma tela sem registro no endereço continua com `resto` vazio e sem a chave `
 
 // o recado interno ("abra este registro") que as Menções, o chat, os avisos e os vínculos gravam
 const recado = (contexto, contextoId) => ({ contexto, contextoId });
-const ALVOS = [['crm', 'crm', 'card'], ['licitacao', 'licitacoes', 'licitacao'], ['compra', 'compras', 'pedido'], ['compra_aprovacao', 'compras', 'pedido'], ['sac', 'sac', 'os'], ['garantia', 'sac', 'ficha'], ['sac_revisao_orcamento', 'sac', 'os'], ['terceiro_servico', 'terceiros', 'servico'], ['tarefa_financeiro', 'financeiro', 'tarefa']];
+const ALVOS = [['crm', 'crm', 'card'], ['licitacao', 'licitacoes', 'licitacao'], ['compra', 'compras', 'pedido'], ['compra_aprovacao', 'compras', 'pedido'], ['sac', 'sac', 'os'], ['garantia', 'sac', 'ficha'], ['sac_revisao_orcamento', 'sac', 'os'], ['terceiro_servico', 'terceiros', 'servico'], ['tarefa_financeiro', 'financeiro', 'tarefa']];   // a OFI (recado `ofi`) vale para as TRÊS telas que fabricam e tem teste à parte
 ALVOS.forEach(([contexto, tela, tipo]) => {
   t(`recado "${contexto}" para a tela ${tela}: vira o registro ${tipo}`, () => {
     const r = registroDoRecado(recado(contexto, U1), tela);
@@ -353,6 +353,11 @@ t('a tarefa do Financeiro: #/financeiro/tarefa/<código> é o registro da tela f
 t('a tarefa do Financeiro: nenhuma aba do Financeiro se chama "tarefa" (a aba das tarefas é `kanban`) e o endereço da aba segue valendo', () => { assert.ok(!R.ABAS_DAS_TELAS.financeiro.abas.some(a => R.nomeDaAba(a) === 'tarefa')); assert.equal(R.abaNoEndereco('#/financeiro/kanban', 'financeiro').aba, 'kanban'); });
 t('a tarefa do Financeiro aberta por cima de uma aba não muda a aba', () => assert.equal(R.abaNoEndereco('#/financeiro/tarefa/' + U1, 'financeiro').tipo, 'fora'));
 t('o recado de tarefa do Financeiro só vira endereço indo para o Financeiro, e sem dica', () => { assert.equal(registroDoRecado(recado('tarefa_financeiro', U1), 'calendario'), null); assert.equal('dica' in registroDoRecado(recado('tarefa_financeiro', U1), 'financeiro'), false); });
+t('a OFI: #/<setor>/ofi/<código> é o registro da tela do setor (Serralheria, Chicotes e Laboratório), não uma aba', () => { ['serralheria', 'chicotes', 'laboratorio'].forEach(tela => { comRegistro('#/' + tela + '/ofi/' + U1, tela, 'ofi', U1); assert.ok(!R.ABAS_DAS_TELAS[tela].abas.some(a => R.nomeDaAba(a) === 'ofi'), tela); assert.equal(R.abaNoEndereco('#/' + tela + '/ofi/' + U1, tela).tipo, 'fora'); assert.equal(R.abaNoEndereco('#/' + tela + '/relatorios', tela).aba, 'relatorios'); }); });
+t('a OFI só existe nas três telas que fabricam: em outra tela #/<tela>/ofi/<código> não é registro', () => IDS.filter(id => !['serralheria', 'chicotes', 'laboratorio'].includes(id)).forEach(id => assert.equal(registroDaTelaNoEndereco('#/' + nomeNoEndereco(id) + '/ofi/' + U1, id), null, id)));
+t('o recado `ofi` vira o registro da OFI indo para qualquer uma das três telas que fabricam, sem dica', () => ['serralheria', 'chicotes', 'laboratorio'].forEach(tela => { const r = registroDoRecado(recado('ofi', U1), tela); assert.equal(r.tela, tela); assert.equal(r.tipo, 'ofi'); assert.equal(r.chave, U1); assert.equal('dica' in r, false); }));
+t('o recado `ofi` para qualquer outra tela não vale, e com código que não é código não vira endereço', () => { IDS.filter(id => !['serralheria', 'chicotes', 'laboratorio'].includes(id)).forEach(id => assert.equal(registroDoRecado(recado('ofi', U1), id), null, id)); ['123', 'OFI-1', '', null, undefined, 12].forEach(x => assert.equal(registroDoRecado(recado('ofi', x), 'chicotes'), null, String(x))); });
+t('o quadro de nomes confere com a OFI nas três telas (nenhum problema)', () => assert.deepEqual(R.conferirQuadroDeNomes(IDS), []));
 t('o recado de garantia não carrega dica (a ficha só tem uma janela)', () => assert.equal('dica' in registroDoRecado(recado('garantia', U1), 'sac'), false));
 t('o serviço de terceiro aberto por cima de uma aba não muda a aba', () => assert.equal(R.abaNoEndereco('#/terceiros/servico/' + U1, 'terceiros').tipo, 'fora'));
 
