@@ -3,6 +3,8 @@ import { supabase } from './supabaseClient';
 import { anexarValoresDosFretes, anexarValoresDasCotacoesDeFrete, anexarValoresDoFaturamento } from './FreteValores';
 import { iniciarVerComo } from './VerComo';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
+import { enviarArquivoPrivado } from './ArquivoPrivado';
+import { LinkDeArquivo } from './ArquivoPrivadoTela';
 import { confirmarRemocao, mostrarAviso } from './Feedback';
 import { Faixa } from './Interface';
 import { explicarErroDoBanco } from './ErroDoBanco';
@@ -2000,11 +2002,10 @@ async function uploadContratoArquivo(file: File): Promise<{ url: string; nome: s
   const nomeLimpo = file.name.normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/[^a-zA-Z0-9.\-_]/g, '_');
   const path = `contratos-padrao/${Date.now()}_${nomeLimpo}`;
-  const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
-  if (error || !data) return { url: '', nome: '', error: explicarErroDeEnvio(error, file) };
-  const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-  if (!pub?.publicUrl) return { url: '', nome: '', error: 'Não foi possível gerar o link público do arquivo.' };
-  return { url: pub.publicUrl, nome: file.name };
+  // bucket privado (plano do bucket privado, B1, 26/11/2026): o banco guarda "privado:<caminho>"
+  const { valor, erro } = await enviarArquivoPrivado(path, file, file.type || undefined);
+  if (erro || !valor) return { url: '', nome: '', error: explicarErroDeEnvio(erro, file) };
+  return { url: valor, nome: file.name };
 }
 
 const VAZIO_CONTRATO = { tipo: '', nome: '', descricao: '' };
@@ -2180,8 +2181,7 @@ function PainelContratosPadrao() {
                   <td style={{ padding:'8px 6px' }}>
                     <div style={{ display:'flex', gap:4, justifyContent:'flex-end' }}>
                       {c.arquivo_url && (
-                        <a className="acn-btn" style={{ background:'#2563eb', fontSize:9, padding:'2px 8px', textDecoration:'none' }}
-                          href={c.arquivo_url} target="_blank" rel="noreferrer">⬇ Baixar</a>
+                        <LinkDeArquivo valor={c.arquivo_url} className="acn-btn" style={{ background:'#2563eb', fontSize:9, padding:'2px 8px', textDecoration:'none' }}>⬇ Baixar</LinkDeArquivo>
                       )}
                       <button className="acn-btn" style={{ background: c.ativo ? '#f59e0b' : '#16a34a', fontSize:9, padding:'2px 8px' }}
                         onClick={() => toggleAtivo(c)}>

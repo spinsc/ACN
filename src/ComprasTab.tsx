@@ -4,6 +4,8 @@ import { supabase } from './supabaseClient';
 import { anexarValoresDosPedidos, anexarValoresDoPedido, vencedorasSemValor, AVISO_SEM_VALORES } from './PedidoValores';
 import { intervaloVisivel } from './IntervaloVisivel';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
+import { enviarArquivoPrivado } from './ArquivoPrivado';
+import { LinkDeArquivo } from './ArquivoPrivadoTela';
 import { confirmarRemocao } from './Feedback';
 import React, { useState, useEffect, useRef } from 'react';
 import MencaoTextarea, { salvarMencoes, resolverMencoesRespondidas, resolverMencoesDeTodos } from './MencaoTextarea';
@@ -289,11 +291,10 @@ function textoComposicao(c: any) {
 async function uploadCotacaoArquivo(file: File): Promise<{ url: string; nome: string; error?: string }> {
   const nomeLimpo = file.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9.\-_]/g, '_');
   const path = `pcp-cotacoes/${Date.now()}_${nomeLimpo}`;
-  const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
-  if (error || !data) return { url: '', nome: '', error: explicarErroDeEnvio(error, file) };
-  const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-  if (!pub?.publicUrl) return { url: '', nome: '', error: 'Não foi possível gerar o link público do arquivo.' };
-  return { url: pub.publicUrl, nome: file.name };
+  // bucket privado (plano do bucket privado, B1, 26/11/2026): o banco guarda "privado:<caminho>"
+  const { valor, erro } = await enviarArquivoPrivado(path, file, file.type || undefined);
+  if (erro || !valor) return { url: '', nome: '', error: explicarErroDeEnvio(erro, file) };
+  return { url: valor, nome: file.name };
 }
 
 // ── Itens na impressão ───────────────────────────────────────────────────────
@@ -932,7 +933,7 @@ function ResumoCompraModal({ pedido: p, canVerValor, departamentos, onClose, cur
               {canVerValor && <span className="acn-ajuda">{textoComposicao(c)}</span>}
               {canVerValor && <span>{moeda(c.valor)}</span>}
               {c.prazo_entrega && <span className="acn-ajuda">prazo {c.prazo_entrega}</span>}
-              {c.arquivo_url && <a href={c.arquivo_url} target="_blank" rel="noreferrer" aria-label="Anexo da cotação"><Icone path={mdiPaperclip} size={13} /></a>}
+              {c.arquivo_url && <LinkDeArquivo valor={c.arquivo_url} aria-label="Anexo da cotação"><Icone path={mdiPaperclip} size={13} /></LinkDeArquivo>}
             </div>
           ))}
           {aprovacoes.length > 0 && (
@@ -3063,7 +3064,7 @@ export default function ComprasTab({ currentUser }) {
                             {c.prazo_entrega ? ` · prazo: ${c.prazo_entrega}` : ''}
                           </div>
                           {c.anexo_url && (
-                            <a href={c.anexo_url} target="_blank" rel="noreferrer" className="acn-cmp-link-web acn-prod-ic"><Icone path={mdiPaperclip} size={12} /> {c.anexo_nome}</a>
+                            <LinkDeArquivo valor={c.anexo_url} className="acn-cmp-link-web acn-prod-ic"><Icone path={mdiPaperclip} size={12} /> {c.anexo_nome}</LinkDeArquivo>
                           )}
                         </div>
                         {podeGerirCompras(currentUser) && (

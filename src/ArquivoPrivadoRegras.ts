@@ -8,10 +8,24 @@ export const BUCKET_PRIVADO = 'acn-privado';
 export const MARCA_PRIVADA = 'privado:';
 const TRECHO_PUBLICO = '/storage/v1/object/public/acn-media/';
 
-/** Pastas que moram no bucket privado: o chat, as assinaturas e a assinatura das OS do SAC (`sac/<pasta>/assinatura_…`; as fotos do SAC seguem públicas). */
+/** Pastas inteiras que já moram no bucket privado. Cresce a cada fatia do PLANO_BUCKET_PRIVADO.md, no mesmo commit em que a tela da fatia passa a ler pelo ajudante.
+ *  5b (26/11/2026): chat e assinaturas. B1 (26/11/2026): Compras, Logística, Financeiro, Viagens, Serviços de terceiros e contratos-padrão. */
+const PASTAS_PRIVADAS = [
+  'chat', 'assinaturas',
+  'compras-anexos', 'pcp-cotacoes', 'pcp-nf-fornecedor', 'pcp-fretes-cotacoes', 'pcp-fretes-canhotos', 'logistica',
+  'centro-custo-despesas', 'financeiro-tarefas', 'viagens', 'terceiros', 'contratos-padrao',
+];
+
+/**
+ * Pastas que moram no bucket privado, mais a assinatura das OS do SAC (`sac/<pasta>/assinatura_…`; as fotos do SAC seguem públicas).
+ * Exceção de propósito: imagem colada dentro de um texto formatado (`…/area-livre/…` e `…/nota/…`) fica pública, porque o endereço está dentro do HTML do texto,
+ * onde um <img> não pode usar o ajudante (plano do bucket privado, cuidado 6; resolve-se na B4 com um componente próprio).
+ */
 export function caminhoEhPrivado(caminho: string | null | undefined): boolean {
   if (!caminho) return false;
-  if (caminho.startsWith('chat/') || caminho.startsWith('assinaturas/')) return true;
+  if (/\/(area-livre|nota)\//.test(caminho)) return false;
+  const pasta = caminho.split('/')[0];
+  if (caminho.includes('/') && PASTAS_PRIVADAS.includes(pasta)) return true;
   return /^sac\/[^/]+\/assinatura_[^/]*$/.test(caminho);
 }
 

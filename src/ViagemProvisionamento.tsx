@@ -19,12 +19,13 @@ import Icone from './Icone';
 import { useColaboradores } from './ColaboradorSelect';
 import { nomeSeguroDeArquivo } from './FormatosArquivo';
 import { explicarErroDeEnvio } from './ErroDeArquivo';
+import { enviarArquivoPrivado } from './ArquivoPrivado';
+import { LinkDeArquivo } from './ArquivoPrivadoTela';
 import { CampoNumero } from './ViagemCampos';
 import { fmtReais } from './ViagemCalculo';
 import { situacaoDaVerba, textoDaVerba } from './ViagemVerba';
 import { mdiPlus, mdiClose, mdiPaperclip, mdiContentSaveOutline, mdiPencilOutline, mdiCarOutline, mdiHistory, mdiCashCheck } from '@mdi/js';
 
-const BUCKET = 'acn-media';
 const LIMITE_ANEXO = 20 * 1024 * 1024;   // contrato escaneado cabe; vídeo não
 
 /** Placa sem hífen e em maiúsculas: é assim que o banco compara (duas placas iguais não entram na frota). */
@@ -114,7 +115,7 @@ export function BlocoProvisionamento({ v, set, pode, frota, erroFrota, orcamento
           <ul className="acn-vg-anexos">
             {(v.contrato_anexos || []).map((a: any, i: number) => (
               <li key={a.path || i}>
-                <a href={a.url} target="_blank" rel="noreferrer"><Icone path={mdiPaperclip} size={14} /> {a.nome}</a>
+                <LinkDeArquivo valor={a.url}><Icone path={mdiPaperclip} size={14} /> {a.nome}</LinkDeArquivo>
                 {pode.comercial && <Botao variante="discreto" pequeno icone={mdiClose} aria-label={`Tirar ${a.nome}`} title="Tirar o arquivo" onClick={() => aoTirarContrato(i)} />}
               </li>
             ))}
@@ -195,10 +196,10 @@ export async function anexarContrato(viagem: any, arquivos: File[], currentUser:
   for (const f of arquivos) {
     if (f.size > LIMITE_ANEXO) { erro = `Não foi possível enviar "${f.name}": o arquivo passa de 20 MB.`; continue; }
     const caminho = `viagens/${viagem.id}/contrato/${Date.now()}-${nomeSeguroDeArquivo(f.name)}`;
-    const { error } = await supabase.storage.from(BUCKET).upload(caminho, f, { upsert: false });
-    if (error) { erro = `Não foi possível enviar "${f.name}": ${explicarErroDeEnvio(error, f)}`; continue; }
-    const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(caminho);
-    novos.push({ nome: f.name, url: pub.publicUrl, path: caminho, tamanho: f.size, por: currentUser?.nome || currentUser?.email || null, em: new Date().toISOString() });
+    // bucket privado (plano do bucket privado, B1, 26/11/2026): o banco guarda "privado:<caminho>" em `url`
+    const { valor, erro: erroEnvio } = await enviarArquivoPrivado(caminho, f, f.type || undefined);
+    if (erroEnvio || !valor) { erro = `Não foi possível enviar "${f.name}": ${explicarErroDeEnvio(erroEnvio, f)}`; continue; }
+    novos.push({ nome: f.name, url: valor, path: caminho, tamanho: f.size, por: currentUser?.nome || currentUser?.email || null, em: new Date().toISOString() });
   }
   if (!novos.length) return { lista: atuais, erro };
   const lista = [...atuais, ...novos];
