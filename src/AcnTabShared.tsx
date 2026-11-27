@@ -1048,7 +1048,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
             subtitulo="O pedido vai para o Compras ligado a esta OP: ele aparece aqui, com o andamento."
             valorInicial={{ titulo: `Compra para a OP ${opl.opl}${opl.cliente_nome ? ' — ' + opl.cliente_nome : ''}`, vinculo: { tipo: 'op', id: String(opl.id), descricao: `${opl.opl}${opl.cliente_nome || opl.modelo ? ' — ' + (opl.cliente_nome || opl.modelo) : ''}` } }}
             origemSetor={String(usuario?.perfil || 'Sistema').replace(/^Gerente\s+/i, '')} opl={opl.opl} contexto={`OP ${opl.opl}`}
-            unidadesDoLote={qtdLote}
+            unidadesDoLote={qtdLote} itensVendidos={Array.isArray(opl.itens_vendidos) ? opl.itens_vendidos : []}
             onClose={() => setPedindoCompra(false)}
             onCriada={(r: any) => { setAvisoCompra(`Requisição ${r.numero_pedido} enviada ao Compras, ligada à OP ${opl.opl}.`); setTickCompras(t => t + 1); }} />
         </Suspense>

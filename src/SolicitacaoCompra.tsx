@@ -26,6 +26,7 @@ import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { DEPTOS } from './RhDepartamentos';
 import { Botao, Faixa } from './Interface';
+import { mdiAutoFix } from '@mdi/js';
 
 export const solicitacaoCompraVazia = (inicial: any = {}) => ({
   titulo: '', descricao: '', itens: [itemVazio()], prioridade: 'Média', prazo: '',
@@ -49,7 +50,7 @@ export function validarSolicitacaoCompra(v: any, centroObrigatorio = false): str
 const PRIORIDADES = ['Alta', 'Média', 'Baixa'];
 
 /** Os campos da solicitação, iguais em qualquer lugar. Controlado: `valor` e `onChange` vêm de quem usa. */
-export function CamposSolicitacaoCompra({ valor, onChange }: { valor: any; onChange: (v: any) => void }) {
+export function CamposSolicitacaoCompra({ valor, onChange, acaoItens = null }: { valor: any; onChange: (v: any) => void; acaoItens?: React.ReactNode }) {
   const set = (k: string, v: any) => onChange({ ...valor, [k]: v });
   const centroObrigatorio = useCentroObrigatorio();
   return (
@@ -65,6 +66,7 @@ export function CamposSolicitacaoCompra({ valor, onChange }: { valor: any; onCha
           placeholder="Para que serve, urgência, referências... @Nome para mencionar" />
       </div>
       {/* 20/10/2026: fornecedor sugerido e link são POR ITEM, numa linha abaixo da descrição; saiu o fornecedor e o link gerais da lista toda */}
+      {acaoItens}
       <ItensDemandaEditor itens={valor.itens} onChange={v => set('itens', v)} titulo="Itens a comprar" comValor comFornecedor
         dica="Valor, fornecedor sugerido e link são opcionais: se não souber, o comprador completa." />
       <div className="form-group">
@@ -163,8 +165,46 @@ export async function enviarSolicitacaoCompra({ valor, currentUser, origemSetor 
 }
 
 /** A janela da solicitação: o mesmo desenho em qualquer tela. `onCriada(resultado, valor)` roda depois de gravar. */
-export function ModalSolicitarCompra({ currentUser, titulo = 'Solicitar compra', subtitulo = '', valorInicial = {}, origemSetor, oportunidadeId = null, opl = null, contexto = '', unidadesDoLote = 0, onClose, onCriada }: any) {
+export function ModalSolicitarCompra({ currentUser, titulo = 'Solicitar compra', subtitulo = '', valorInicial = {}, origemSetor, oportunidadeId = null, opl = null, contexto = '', unidadesDoLote = 0, itensVendidos = [], onClose, onCriada }: any) {
   const [valor, setValor] = useState(() => solicitacaoCompraVazia(valorInicial));
+  // 27/11/2026 (pedido do usuário): quando o pedido sai de uma OP, "Sugerir pelo que foi vendido" monta a lista de itens a comprar com a mesma conta da BOM do PCP
+  // (`sugerirBom`: kit abre nos itens da estrutura, item do catálogo entra direto, serviço e item genérico ficam de fora, o que vem incluso entra junto).
+  const [sugerindo, setSugerindo] = useState(false);
+  const [avisoSugestao, setAvisoSugestao] = useState<{ tom: 'ok' | 'atencao' | 'erro'; texto: string } | null>(null);
+  const sugerirDoVendido = async () => {
+    setSugerindo(true); setAvisoSugestao(null);
+    try {
+      const { sugerirBom } = await import('./OpItens');   // só baixa quando a pessoa clica
+      const { itensConjunto } = await import('./ConfigEstrutura');
+      const bruta: any = await sugerirBom(itensVendidos);
+      // o Conjunto Elétrico é o gatilho da estrutura de instalação, não uma peça que se compra (o PCP também o tira da BOM sugerida); leitura recusada vira erro, nunca "sem conjunto"
+      const conj = await itensConjunto();
+      const sug: any = bruta.filter((l: any) => !conj.some((c: any) => String(c.id) === String(l.item_id)));
+      sug.semCadastro = bruta.semCadastro;
+      const fora: string[] = sug.semCadastro || [];
+      const foraTxt = fora.length ? ` Não estão no cadastro (nem com o mesmo nome) e ficaram de fora: ${fora.join(', ')}. Digite-os à mão.` : '';
+      if (!sug.length) { setAvisoSugestao({ tom: 'atencao', texto: 'Os itens vendidos não têm estrutura nem código do cadastro para sugerir a lista.' + foraTxt }); return; }
+      // só acrescenta o que ainda não está na lista (apertar duas vezes não duplica) e tira a linha em branco do começo
+      const atuais = itensPreenchidos(valor.itens || []);
+      const jaTem = new Set(atuais.map((i: any) => i.item_id || `txt:${i.nome}`));
+      const novas = sug.filter((l: any) => !jaTem.has(l.item_id || `txt:${l.nome}`))
+        .map((l: any) => ({ nome: l.nome, quantidade: l.quantidade, descricao: l.descricao || '', item_id: l.item_id || null, produto_codigo: l.codigo || null }));
+      if (!novas.length) { setAvisoSugestao({ tom: 'atencao', texto: 'A lista já tem todos os itens que o vendido sugere.' + foraTxt }); return; }
+      setValor((v: any) => ({ ...v, itens: [...atuais, ...novas] }));
+      setAvisoSugestao({ tom: fora.length ? 'atencao' : 'ok', texto: `${novas.length === 1 ? '1 item acrescentado' : `${novas.length} itens acrescentados`} pelo que foi vendido. Confira as quantidades e tire o que não precisa comprar.` + foraTxt });
+    } catch (e: any) {
+      setAvisoSugestao({ tom: 'erro', texto: 'Não foi possível montar a lista pelo que foi vendido: ' + (e?.message || e) });
+    } finally { setSugerindo(false); }
+  };
+  const botaoSugerir = (Array.isArray(itensVendidos) && itensVendidos.length > 0) ? (
+    <div className="acn-sco-sugerir">
+      <Botao pequeno variante="secundario" icone={mdiAutoFix} onClick={sugerirDoVendido} disabled={sugerindo}
+        title="Põe na lista os itens vendidos nesta OP (kit abre nos itens), do mesmo jeito que o PCP monta a BOM">
+        {sugerindo ? 'Montando...' : 'Sugerir pelo que foi vendido'}
+      </Botao>
+      {avisoSugestao && <Faixa tom={avisoSugestao.tom}>{avisoSugestao.texto}</Faixa>}
+    </div>
+  ) : null;
   // só existe quando o pedido sai de um lote de 2 ou mais veículos; começa DESMARCADA (marcar sem querer multiplicaria o pedido)
   const [valeParaOLote, setValeParaOLote] = useState(false);
   const temLote = Number(unidadesDoLote) > 1;
@@ -214,7 +254,7 @@ export function ModalSolicitarCompra({ currentUser, titulo = 'Solicitar compra',
               )}
             </div>
           )}
-          <CamposSolicitacaoCompra valor={valor} onChange={setValor} />
+          <CamposSolicitacaoCompra valor={valor} onChange={setValor} acaoItens={botaoSugerir} />
           {erro && <Faixa tom="erro">{erro}</Faixa>}
         </div>
         <div className="acn-modal-rodape acn-sac-rodape">
