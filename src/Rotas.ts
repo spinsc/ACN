@@ -67,7 +67,7 @@ export const REGISTROS_DAS_TELAS: Readonly<Record<string, readonly TipoDeRegistr
   compras: ['pedido'],
   sac: ['os', 'ficha'],   // a ficha da Garantia mora na aba Garantia do SAC (a palavra não pode ser `garantia`: é o nome da aba)
   terceiros: ['servico'],
-  engenharia: ['projeto'],   // a demanda do Desenvolvimento (aba Desenvolvimento); a palavra não é `desenvolvimento` porque esse é o nome da aba
+  engenharia: ['projeto', 'tarefa'],   // `projeto` = a demanda do Desenvolvimento (aba Desenvolvimento; a palavra não é `desenvolvimento` porque esse é o nome da aba); `tarefa` = a tarefa da Engenharia (aba Horas/Tarefas, janela de leitura; a aba filha é `tarefas`, no plural)
   vistorias: ['vistoria'],   // a ficha da vistoria de pátio (janela VER); o retorno e o formulário de saída seguem pelo recado (decidido com o usuário em 26/11/2026)
   serralheria: ['ofi'],   // a OFI (ordem de fabricação interna) mora na fila de cada setor que fabrica: o endereço é o do setor DESTINO dela, e a palavra não colide com as abas (demandas, relatorios)
   chicotes: ['ofi'],
@@ -386,6 +386,8 @@ const REGISTRO_DO_CONTEXTO: Readonly<Record<string, { tela: string | readonly st
   ofi: { tela: ['serralheria', 'chicotes', 'laboratorio'], tipo: 'ofi' },
   // Fase 6 (26/11/2026): a Menção da área livre de uma demanda do Desenvolvimento, o "Abrir o projeto" da Garantia e a data de uma etapa (Calendário) trazem o id da demanda
   desenvolvimento: { tela: 'engenharia', tipo: 'projeto' },
+  // Fase 6 (26/11/2026): a Menção da tarefa da Engenharia (participante marcado) e a data dela no Calendário trazem o id da tarefa
+  tarefa_engenharia: { tela: 'engenharia', tipo: 'tarefa' },
 };
 
 function telasDoAlvo(tela: string | readonly string[]): readonly string[] { return typeof tela === 'string' ? [tela] : tela; }

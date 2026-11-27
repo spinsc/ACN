@@ -419,6 +419,42 @@ const DEFEITOS = [
   { id: 'pi', nome: 'o recado da Menção (contexto desenvolvimento) deixa de virar o endereço da demanda', cenarios: '^C106', trocas: [
     { arquivo: 'src/Rotas.ts', de: "  desenvolvimento: { tela: 'engenharia', tipo: 'projeto' },", para: "  // desenvolvimento: { tela: 'engenharia', tipo: 'projeto' }," },
   ] },
+  { id: 'ea', nome: 'a tela da Engenharia deixa de conhecer a tarefa como registro (o endereço #/engenharia/tarefa/<código> não é lido)', cenarios: '^C1(0[7-9]|1[0-2])', trocas: [
+    { arquivo: 'src/Rotas.ts', de: "  engenharia: ['projeto', 'tarefa'],", para: "  engenharia: ['projeto']," },
+  ] },
+  { id: 'eb', nome: 'o item "Abrir em janela" não escreve o endereço da tarefa (a janela abre, a barra continua na tela)', cenarios: '^C107', trocas: [
+    { arquivo: 'src/HorasTarefasTab.tsx', de: "    aberto: abertaId,", para: "    aberto: null," },
+  ] },
+  { id: 'ec', nome: 'a janela da tarefa perde o botão "Copiar link"', cenarios: '^C110', trocas: [
+    { arquivo: 'src/HorasTarefasTab.tsx', de: "aria-label=\"Copiar o link desta tarefa\"", para: "aria-label=\"x\" style={{ display: 'none' }}" },
+  ] },
+  { id: 'ed', nome: 'a janela não se fecha quando o endereço deixa de ser o dela (o Voltar não a fecha)', cenarios: '^C107', trocas: [
+    { arquivo: 'src/HorasTarefasTab.tsx', de: "    fechar: () => setAbertaId(null),", para: "    fechar: () => {}," },
+  ] },
+  { id: 'ee', nome: 'o link colado não abre a tarefa (a leitura pelo código responde sempre "não encontrei")', cenarios: '^C108', trocas: [
+    { arquivo: 'src/HorasTarefasTab.tsx', de: "      const r = await lerPorCodigo(supabase.from('engenharia_horas_tarefas').select('*').eq('id', chave).maybeSingle());", para: "      const r = { registro: null, erro: '' };" },
+  ] },
+  { id: 'ef', nome: 'a leitura recusada da tarefa vira "não encontrei" (esconde que o banco falhou)', cenarios: '^C109', trocas: [
+    { arquivo: 'src/HorasTarefasTab.tsx', de: "      if (!r.registro || gestor) return r;", para: "      if (!r.registro || gestor) return { registro: r.registro, erro: '' };" },
+  ] },
+  { id: 'eg', nome: 'com outra aba da Engenharia aberta, o endereço da tarefa não troca para a aba Horas/Tarefas', cenarios: '^C110', trocas: [
+    { arquivo: 'src/EngenhariaTab.tsx', de: "      else if (tipo === 'tarefa') setAbaEng('horas');", para: "      else if (tipo === 'tarefa') void 0;" },
+  ] },
+  { id: 'eh', nome: 'a data de uma tarefa da Engenharia deixa de abrir a tarefa pelo botão "Abrir" do Calendário', cenarios: '^C111', trocas: [
+    { arquivo: 'src/CalendarioAviso.ts', de: "  tarefa_engenharia: 'tarefa_engenharia',", para: "  // tarefa_engenharia: 'tarefa_engenharia'," },
+  ] },
+  { id: 'ei', nome: 'o recado da Menção (contexto tarefa_engenharia) deixa de virar o endereço da tarefa', cenarios: '^C111', trocas: [
+    { arquivo: 'src/Rotas.ts', de: "  tarefa_engenharia: { tela: 'engenharia', tipo: 'tarefa' },", para: "  // tarefa_engenharia: { tela: 'engenharia', tipo: 'tarefa' }," },
+  ] },
+  { id: 'ej', nome: 'quem não é gestor abre a tarefa de OUTRA pessoa (a janela deixa de seguir a regra da lista)', cenarios: '^C112', trocas: [
+    { arquivo: 'src/HorasTarefasTab.tsx', de: "      return mesmaPessoa(r.registro.responsavel_nome, p.nomes) ? r : { registro: null, erro: '' };", para: "      return r;" },
+  ] },
+  { id: 'ek', nome: 'sem ler quem a pessoa é (RH recusado) a janela diz "não encontrei" em vez de "a leitura falhou"', cenarios: '^C112', trocas: [
+    { arquivo: 'src/HorasTarefasTab.tsx', de: "      if (p.erro) return { registro: null, erro: p.erro };", para: "      if (p.erro) return { registro: null, erro: '' };" },
+  ] },
+  { id: 'el', nome: 'o menu da linha perde o item "Abrir em janela"', cenarios: '^C107', trocas: [
+    { arquivo: 'src/HorasTarefasTab.tsx', de: "oculto: !onAbrir },", para: "oculto: true }," },
+  ] },
 ];
 
 const md5 = (b) => crypto.createHash('md5').update(b).digest('hex');

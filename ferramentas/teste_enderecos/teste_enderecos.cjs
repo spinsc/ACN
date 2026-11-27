@@ -4195,6 +4195,240 @@ const marcarHistoricoInicial = (page) => page.evaluateOnNewDocument(() => { if (
     confere('nenhum aviso', al.length === 0, JSON.stringify(al));
   });
 
+  // ═════════ a tarefa da Engenharia (`#/engenharia/tarefa/<código>`, janela de LEITURA por cima da lista da aba Horas/Tarefas) — Fase 6 ═════════
+  // As tarefas são SIMULADAS (a lista e a leitura de uma só respondem o que o cenário manda; o banco de produção só tem tarefas reais). O relógio, as horas extras e os feriados leem o banco real, só leitura.
+  const MSG_TE_NAO_ACHOU = 'Não foi possível abrir a tarefa da Engenharia: não a encontrei, ou você não tem acesso a ela.';
+  const JTE = '[role="dialog"][aria-label="Tarefa da Engenharia"]';
+  const tarefaEng = (n, extra = {}) => ({
+    id: '0000000e-0000-4000-8000-00000000000' + n, titulo: 'ZZ Tarefa Eng ' + n, responsavel_nome: 'ZZTESTE', status: 'nao_iniciada', data_inicio: null, data_conclusao: null,
+    pausas: [], tempo_pausado_segundos: 0, observacoes: '', numero_opl: null, opl_id: null, participantes: [], criado_por: 'zzteste@teste.local',
+    criado_em: '2026-11-20T12:00:00Z', atualizado_em: '2026-11-20T12:00:00Z',
+    ...extra,
+  });
+  const TE1 = tarefaEng(1);
+  const TE2 = tarefaEng(2, { status: 'concluida', data_inicio: '2026-11-20T12:00:00Z', data_conclusao: '2026-11-20T15:00:00Z', tempo_total_segundos: 10800, observacoes: 'observação simulada da tarefa',
+    pausas: [{ motivo: 'motivo simulado da pausa', pausado_em: '2026-11-20T13:00:00Z', retomado_em: '2026-11-20T13:30:00Z' }] });
+  const TE3 = tarefaEng(3, { responsavel_nome: 'Outra Pessoa ZZ Simulada' });
+  /** O que o banco "responde" sobre as tarefas da Engenharia: a lista, a leitura de uma só (lista de zero ou uma linha, como o `.maybeSingle()` pede) e, se o cenário quiser, o RH recusado. */
+  const bancoDeTarefasEng = (tarefas, { recusa = () => false, recusaRh = () => false, lidas = [] } = {}) => (url, r) => {
+    if (r.method() !== 'GET') return null;
+    if (url.includes('/rest/v1/rh_funcionarios_basico?') && recusaRh()) return { status: 500, body: { message: 'erro simulado do RH' } };
+    if (url.includes('/rest/v1/engenharia_horas_tarefas?')) {
+      if (url.includes('id=eq.')) {
+        const m = url.match(/id=eq\.([^&]+)/); const id = m ? m[1] : '';
+        lidas.push(id);
+        if (recusa(id)) return { status: 500, body: { message: 'erro simulado do banco' } };
+        const t = tarefas.find(x => x.id === id);
+        return { status: 200, body: t ? [t] : [] };
+      }
+      return { status: 200, body: tarefas };
+    }
+    return null;
+  };
+  const estadoTE = (page) => page.evaluate((jt) => {
+    const aba = document.querySelector('.acn-main [role="tab"][aria-selected="true"]');
+    const j = document.querySelector(jt);
+    return {
+      hash: location.hash, titulo: document.title, historico: history.length, marca: !!(history.state && history.state.acn === 1),
+      janelas: document.querySelectorAll(jt).length, tarefa: j ? (j.querySelector('.modal-title') || { innerText: null }).innerText : null, texto: j ? j.innerText : '',
+      abaAtiva: aba ? aba.innerText.replace(/\s+\d+$/, '').trim() : '', origem: location.origin + location.pathname,
+    };
+  }, JTE);
+  const esperarTE = (page, ms = 40000) => page.waitForSelector(JTE, { timeout: ms });
+  const esperarSemTE = (page, ms = 15000) => page.waitForFunction((s) => !document.querySelector(s), { timeout: ms }, JTE);
+  const fecharTE = (page) => page.evaluate((s) => { const b = [...document.querySelectorAll(s + ' .acn-modal-rodape button')].find(x => x.innerText.trim() === 'Fechar'); if (!b) throw new Error('não achei o botão Fechar da tarefa'); b.click(); }, JTE);
+  const esperarDesfechoTE = (page, ms = 25000) => page.waitForFunction(() => !/^#\/engenharia\/tarefa\//i.test(location.hash), { timeout: ms }).catch(() => {});
+  const esperarListaTE = (page, titulo) => page.waitForFunction((t) => [...document.querySelectorAll('tbody tr')].some(tr => tr.innerText.includes(t)), { timeout: 40000 }, titulo);
+  /** Abre a janela da tarefa pelo menu ⋯ da linha (o botão "Abrir em janela"). */
+  const abrirTePeloMenu = async (page, titulo) => {
+    await page.evaluate((t) => { const tr = [...document.querySelectorAll('tbody tr')].find(x => x.innerText.includes(t)); tr.querySelector('button[aria-label="Mais ações da tarefa"]').click(); }, titulo);
+    await page.waitForSelector('[role="menuitem"]', { timeout: 10000 });
+    await page.evaluate(() => { const b = [...document.querySelectorAll('[role="menuitem"]')].find(x => /Abrir em janela/.test(x.innerText)); if (!b) throw new Error('não achei o item "Abrir em janela" do menu'); b.click(); });
+  };
+  const ENDERECO_DAS_TAREFAS_ENG = '#/engenharia/horas';
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C107 Tarefa da Engenharia: o item "Abrir em janela" do menu escreve o endereço; Voltar fecha, Avançar reabre e o Fechar volta um passo', { simular: bancoDeTarefasEng([TE1, TE2]) }, async ({ page }) => {
+    await page.goto(BASE + ENDERECO_DAS_TAREFAS_ENG, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarListaTE(page, TE1.titulo); await espera(900);
+    const antes = await estadoTE(page);
+    confere('a lista abre sem janela e sem endereço de registro', antes.janelas === 0 && antes.hash === ENDERECO_DAS_TAREFAS_ENG, JSON.stringify({ j: antes.janelas, h: antes.hash }));
+    await abrirTePeloMenu(page, TE2.titulo);
+    await esperarTE(page); await espera(900);
+    let e = await estadoTE(page);
+    confere('o clique escreve o endereço da tarefa aberta, um passo novo no histórico, e a janela é uma só', e.hash === '#/engenharia/tarefa/' + TE2.id && e.janelas === 1 && e.historico === antes.historico + 1 && e.marca === true, JSON.stringify({ h: e.hash, j: e.janelas, hist: e.historico, antes: antes.historico }));
+    confere('a janela mostra a tarefa (título, observação, pausa e a explicação de onde se muda a tarefa)', e.tarefa === TE2.titulo && /observação simulada/.test(e.texto) && /motivo simulado da pausa/.test(e.texto) && /use os botões da linha/.test(e.texto), JSON.stringify({ t: e.tarefa, x: e.texto.slice(0, 200) }));
+    await page.goBack(); await esperarSemTE(page); await espera(900);
+    e = await estadoTE(page);
+    confere('o Voltar fecha a janela e volta a #/engenharia/horas', e.janelas === 0 && e.hash === ENDERECO_DAS_TAREFAS_ENG, JSON.stringify({ j: e.janelas, h: e.hash }));
+    await page.goForward(); await esperarTE(page); await espera(900);
+    e = await estadoTE(page);
+    confere('o Avançar reabre a mesma tarefa', e.janelas === 1 && e.hash === '#/engenharia/tarefa/' + TE2.id, JSON.stringify({ j: e.janelas, h: e.hash }));
+    await fecharTE(page); await esperarSemTE(page); await espera(900);
+    e = await estadoTE(page);
+    confere('o Fechar tira o endereço da tarefa (um passo atrás)', e.janelas === 0 && e.hash === ENDERECO_DAS_TAREFAS_ENG, JSON.stringify({ j: e.janelas, h: e.hash }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C108 Tarefa da Engenharia: link colado (primeira página) abre a janela; F5 reabre; o Fechar nunca sai do sistema', { simular: bancoDeTarefasEng([TE1, TE2]) }, async ({ page }) => {
+    const end = '#/engenharia/tarefa/' + TE1.id;
+    await abrirComoLinkColado(page, end);
+    await esperarSistema(page); await esperarTE(page); await espera(900);
+    let e = await estadoTE(page);
+    const origem = e.origem, h0 = e.historico;
+    confere('o link abre a tarefa certa, uma só, e o endereço continua o do link (não é reescrito)', e.hash === end && e.janelas === 1 && e.tarefa === TE1.titulo && e.marca === false, JSON.stringify({ h: e.hash, j: e.janelas, t: e.tarefa, m: e.marca }));
+    confere('a aba aberta é a de Horas/Tarefas', /Horas/i.test(e.abaAtiva), JSON.stringify({ a: e.abaAtiva }));
+    await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await esperarTE(page); await espera(900);
+    e = await estadoTE(page);
+    confere('F5 reabre a mesma tarefa, no mesmo endereço', e.hash === end && e.janelas === 1 && e.tarefa === TE1.titulo, JSON.stringify({ h: e.hash, j: e.janelas, t: e.tarefa }));
+    await fecharTE(page); await esperarSemTE(page); await espera(900);
+    e = await estadoTE(page);
+    confere('fechar troca o endereço pelo da tela, sem sair do sistema nem criar passo', /^#\/engenharia/.test(e.hash) && !/tarefa/.test(e.hash) && e.janelas === 0 && e.origem === origem && e.historico === h0, JSON.stringify({ h: e.hash, j: e.janelas, o: e.origem, hist: e.historico, h0 }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  {
+    let modo = 'normal';
+    const lidas = [];
+    await cenario('C109 Tarefa da Engenharia que não existe, que não é código e com a leitura recusada: UMA mensagem, sem janela, endereço limpo', {
+      simular: bancoDeTarefasEng([TE1, TE2], { recusa: () => modo === 'recusa', lidas }),
+    }, async ({ page }) => {
+      const casos = [
+        ['não existe (código válido)', 'normal', UUID_INEXISTENTE, true, MSG_TE_NAO_ACHOU],
+        ['não é um código (texto)', 'normal', 'ZZNAOEXISTE9999', false, MSG_TE_NAO_ACHOU],
+        ['o banco recusa a leitura', 'recusa', TE1.id, true, 'Não foi possível abrir a tarefa da Engenharia: a leitura falhou (erro simulado do banco). Tente de novo.'],
+      ];
+      for (const [nome, m, codigo, leBanco, texto] of casos) {
+        modo = m; lidas.length = 0;
+        await LA(page).catch(() => {});
+        await abrirComoLinkColado(page, '#/engenharia/tarefa/' + codigo);
+        await esperarSistema(page); await esperarDesfechoTE(page); await espera(800);
+        const e = await estadoTE(page);
+        const al = await A(page);
+        const msgs = al.filter(x => x.startsWith('Não foi possível abrir a tarefa da Engenharia'));
+        confere(`tarefa (${nome}): UMA mensagem, a certa`, msgs.length === 1 && msgs[0] === texto, JSON.stringify(al));
+        confere(`tarefa (${nome}): nenhuma janela e o endereço sai do da tarefa`, e.janelas === 0 && !/tarefa\//.test(e.hash), JSON.stringify({ j: e.janelas, h: e.hash }));
+        confere(`tarefa (${nome}): ${leBanco ? 'perguntou ao banco' : 'nem perguntou ao banco (um texto que não é código não existe)'}`, leBanco ? lidas.length >= 1 : lidas.length === 0, JSON.stringify(lidas));
+        await LA(page);
+        modo = 'normal';
+        await page.reload({ waitUntil: 'domcontentloaded' }); await esperarSistema(page); await espera(1500);
+        const depois = await A(page);
+        confere(`tarefa (${nome}): o F5 depois disso não avisa de novo`, depois.length === 0, JSON.stringify(depois));
+      }
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  await cenario('C110 Tarefa da Engenharia: "Copiar link"; aberta com outra aba da Engenharia aberta troca para Horas/Tarefas; Voltar e Avançar', { simular: bancoDeTarefasEng([TE1, TE2]) }, async ({ page }) => {
+    await instalarClipboardDeTeste(page);
+    await page.goto(BASE + '#/engenharia/tarefa/' + TE1.id, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await esperarTE(page); await espera(900);
+    const SEL = JTE + ' button[aria-label="Copiar o link desta tarefa"]';
+    const existe = await page.evaluate((s) => !!document.querySelector(s), SEL);
+    confere('a janela tem o botão "Copiar link"', existe, SEL);
+    if (existe) {
+      const clicar = async () => { await page.evaluate((s) => document.querySelector(s).click(), SEL); await espera(900); };
+      const completo = BASE + '#/engenharia/tarefa/' + TE1.id;
+      const ok = 'Link da tarefa copiado. É só colar na mensagem ou no e-mail.';
+      await page.evaluate(() => { window.__copiado.length = 0; window.__modoCopia = 'moderna'; });
+      await LA(page); await clicar();
+      let al = await A(page);
+      const copiado = await page.evaluate(() => window.__copiado);
+      confere('copia o endereço COMPLETO (base atual + #/engenharia/tarefa/<código>)', copiado.length === 1 && copiado[0] === completo, JSON.stringify(copiado) + ' esperado ' + completo);
+      confere('avisa que copiou', al.length === 1 && al[0] === ok, JSON.stringify(al));
+      await page.evaluate(() => { window.__modoCopia = 'falha'; });
+      await LA(page); await clicar();
+      al = await A(page);
+      confere('as duas formas falham: mensagem de erro que manda copiar da barra', al.length === 1 && al[0] === 'Não foi possível copiar o link da tarefa. Copie o endereço que está na barra do navegador.', JSON.stringify(al));
+      const e = await estadoTE(page);
+      confere('copiar não mexeu no endereço nem fechou a janela', e.hash === '#/engenharia/tarefa/' + TE1.id && e.janelas === 1, JSON.stringify({ h: e.hash, j: e.janelas }));
+    }
+    await LA(page);
+    // com a aba Estruturas aberta, o endereço de uma tarefa troca para Horas/Tarefas e abre a janela; o Voltar volta às Estruturas
+    await page.goto(BASE + '#/engenharia/estruturas', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(2500);
+    let e = await estadoTE(page);
+    confere('a aba Estruturas abre sem janela (#/engenharia/estruturas)', e.hash === '#/engenharia/estruturas' && e.janelas === 0 && /Estruturas/i.test(e.abaAtiva), JSON.stringify({ h: e.hash, j: e.janelas, a: e.abaAtiva }));
+    await page.evaluate((h) => { location.hash = h; }, '#/engenharia/tarefa/' + TE2.id);
+    await esperarTE(page); await espera(900);
+    e = await estadoTE(page);
+    confere('o endereço de uma tarefa, com as Estruturas abertas, troca para Horas/Tarefas e abre a janela', e.janelas === 1 && /Horas/i.test(e.abaAtiva) && e.hash === '#/engenharia/tarefa/' + TE2.id && e.tarefa === TE2.titulo, JSON.stringify({ j: e.janelas, a: e.abaAtiva, h: e.hash, t: e.tarefa }));
+    await page.goBack(); await esperarSemTE(page); await espera(900);
+    e = await estadoTE(page);
+    confere('o Voltar fecha a janela e volta à aba Estruturas', e.janelas === 0 && e.hash === '#/engenharia/estruturas' && /Estruturas/i.test(e.abaAtiva), JSON.stringify({ j: e.janelas, h: e.hash, a: e.abaAtiva }));
+    await page.goForward(); await esperarTE(page); await espera(900);
+    e = await estadoTE(page);
+    confere('o Avançar reabre a janela, na aba Horas/Tarefas', e.janelas === 1 && e.hash === '#/engenharia/tarefa/' + TE2.id && /Horas/i.test(e.abaAtiva), JSON.stringify({ j: e.janelas, h: e.hash, a: e.abaAtiva }));
+    const al = await A(page);
+    confere('nenhum aviso no fim', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // os atalhos de dentro do sistema: a Menção do participante (recado) e a data da tarefa no Calendário (botão "Abrir")
+  await cenario('C111 Tarefa da Engenharia: a Menção (recado) e o botão "Abrir" do Calendário abrem a janela pelo endereço, em UM passo', {
+    simular: (url, r) => (r.method() === 'POST' && /\/rpc\/calendario_eventos/.test(url) ? { status: 200, body: EVENTOS_CAL.lista } : bancoDeTarefasEng([TE1, TE2])(url, r)),
+  }, async ({ page }) => {
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(2000);
+    const h0 = (await estadoTE(page)).historico;
+    await page.evaluate((id) => { window.__acnDeepLink = { contexto: 'tarefa_engenharia', contextoId: id }; window.dispatchEvent(new CustomEvent('acn:ir-para-aba', { detail: { aba: 'engenharia' } })); }, TE1.id);
+    await esperarTE(page); await espera(900);
+    let e = await estadoTE(page);
+    const recado = await page.evaluate(() => window.__acnDeepLink);
+    confere('a Menção abre a tarefa pelo endereço (#/engenharia/tarefa/<código>), na aba Horas/Tarefas, uma janela só', e.hash === '#/engenharia/tarefa/' + TE1.id && e.janelas === 1 && /Horas/i.test(e.abaAtiva) && e.tarefa === TE1.titulo, JSON.stringify({ h: e.hash, j: e.janelas, a: e.abaAtiva, t: e.tarefa }));
+    confere('UM passo novo no histórico (a tela e a tarefa num passo só) e o recado foi consumido', e.historico === h0 + 1 && !recado, JSON.stringify({ h0, h1: e.historico, recado }));
+    // o Calendário: a data da tarefa da Engenharia (a chave da data é o id da tarefa)
+    EVENTOS_CAL.lista = [eventoDoCal('tarefa_engenharia', TE2.id, 'ZZ tarefa da Engenharia no Calendário')];
+    await page.goto(BASE + '#/calendario', { waitUntil: 'domcontentloaded' });
+    await esperarSistema(page); await espera(1800);
+    await abrirDoDia(page, 'ZZ tarefa da Engenharia no Calendário');
+    await esperarTE(page); await espera(900);
+    e = await estadoTE(page);
+    confere('o botão "Abrir" do Calendário abre a tarefa pelo endereço, na aba Horas/Tarefas', e.hash === '#/engenharia/tarefa/' + TE2.id && e.janelas === 1 && /Horas/i.test(e.abaAtiva) && e.tarefa === TE2.titulo, JSON.stringify({ h: e.hash, j: e.janelas, a: e.abaAtiva, t: e.tarefa }));
+    await page.goBack(); await esperarSemTE(page); await espera(900);
+    e = await estadoTE(page);
+    confere('o Voltar fecha a janela e volta ao Calendário', e.janelas === 0 && e.hash === '#/calendario', JSON.stringify({ j: e.janelas, h: e.hash }));
+    const al = await A(page);
+    confere('nenhum aviso', al.length === 0, JSON.stringify(al));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // quem NÃO é gestor só vê, na lista, as tarefas de que é o responsável: a janela segue a mesma regra (a tarefa de outra pessoa responde como se não existisse)
+  {
+    let rhRecusado = false;
+    await cenario('C112 Tarefa da Engenharia, quem não é gestor: abre a sua; a de outra pessoa responde "não encontrei"; sem ler quem a pessoa é, diz que a leitura falhou', {
+      usuario: { ...USUARIO_ADMIN, perfil: 'Engenharia', abas_permitidas: ['engenharia'] },
+      simular: bancoDeTarefasEng([TE1, TE2, TE3], { recusaRh: () => rhRecusado }),
+    }, async ({ page }) => {
+      await abrirComoLinkColado(page, '#/engenharia/tarefa/' + TE1.id);
+      await esperarSistema(page); await esperarTE(page); await espera(900);
+      let e = await estadoTE(page);
+      confere('a tarefa DELA abre pelo link', e.janelas === 1 && e.hash === '#/engenharia/tarefa/' + TE1.id && e.tarefa === TE1.titulo, JSON.stringify({ j: e.janelas, h: e.hash, t: e.tarefa }));
+      await fecharTE(page); await esperarSemTE(page); await espera(900);
+      await LA(page).catch(() => {});
+      await page.evaluate((id) => { location.hash = '#/engenharia/tarefa/' + id; }, TE3.id);
+      await esperarDesfechoTE(page); await espera(900);
+      e = await estadoTE(page);
+      let al = await A(page);
+      const msgs = al.filter(x => x.startsWith('Não foi possível abrir a tarefa da Engenharia'));
+      confere('a tarefa de OUTRA pessoa: UMA mensagem de "não encontrei", sem janela', e.janelas === 0 && msgs.length === 1 && msgs[0] === MSG_TE_NAO_ACHOU, JSON.stringify({ j: e.janelas, h: e.hash, al }));
+      const naLista = await page.evaluate(() => [...document.querySelectorAll('tbody tr')].map(tr => tr.innerText));
+      confere('a lista também não mostra a de outra pessoa (a regra da janela é a da lista)', naLista.some(t => t.includes(TE1.titulo)) && !naLista.some(t => t.includes(TE3.titulo)), JSON.stringify(naLista.map(t => t.slice(0, 30))));
+      await LA(page);
+      rhRecusado = true;
+      await abrirComoLinkColado(page, '#/engenharia/tarefa/' + TE1.id);
+      await esperarSistema(page); await esperarDesfechoTE(page); await espera(1200);
+      e = await estadoTE(page);
+      al = await A(page);
+      const falhou = al.filter(x => x.startsWith('Não foi possível abrir a tarefa da Engenharia'));
+      confere('sem ler o cadastro do RH: nenhuma janela e UMA mensagem que diz que a leitura falhou (nunca "não encontrei")', e.janelas === 0 && falhou.length === 1 && /a leitura falhou/.test(falhou[0]) && !/não a encontrei/.test(falhou[0]), JSON.stringify({ j: e.janelas, h: e.hash, al }));
+    });
+  }
+
   console.log('\n══════════ RESUMO ══════════');
   const falhas = resultados.filter(r => !r.ok);
   console.log(`${resultados.length - falhas.length} de ${resultados.length} conferências passaram; ${falhas.length} falharam`);
